@@ -3,32 +3,32 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
-<meta name="app-build" content="202610281845">
+<meta name="app-build" content="202610282014">
 <title>Torre de Controle - Transpanorama</title>
-<link rel="icon" href="logo.svg" type="image/svg+xml">
+<link rel="icon" href="favicon.png" type="image/png">
 <link rel="preconnect" href="https://fonts.googleapis.com">
-<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Montserrat:wght@600;700;800&family=Open+Sans:wght@400;500;600;700&display=swap">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Lato:wght@400;700;900&family=Roboto:wght@400;500;700&display=swap">
 <script>
   // tema antes de pintar, para não piscar
   (function(){ try{ var th = localStorage.getItem('frt_tema') || (matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light'); document.documentElement.dataset.theme = th; }catch(e){ document.documentElement.dataset.theme = 'light'; } })();
 </script>
 <style>
 :root{
-  /* visual Transpanorama (canvas "Torre de Controle — Transpanorama"): marinho, dourado, Montserrat + Open Sans */
-  --bg:#f4f6f9; --panel:#ffffff; --panel-2:#edeff2; --ink:#1b2433; --ink-2:#3a4452; --ink-3:#5a6474; --line:#e2e5ea; --line-2:#c5cbd4;
-  --brand:#0a2a5c; --title:#0a2a5c; --gold:#c8a13a; --gold-ink:#8a6a12;
-  --accent:#1456b8; --accent-ink:#ffffff; --accent-soft:#e3ecf9; --pri:#0a2a5c; --pri-ink:#ffffff;
-  --amber:#9a3f08; --amber-soft:#fce9dc; --red:#a3261b; --red-soft:#f9e1de; --green:#1f7a4d; --green-soft:#e2f1e8; --blue:#1456b8; --blue-soft:#e3ecf9; --gray-soft:#edeff2;
-  --shadow:0 1px 2px rgba(6,26,58,.05), 0 1px 3px rgba(6,26,58,.07); --shadow-lg:0 20px 50px -24px rgba(6,26,58,.45);
-  --f:"Open Sans","Segoe UI",Arial,sans-serif; --fh:"Montserrat",Arial,sans-serif; --fm:"Montserrat",Arial,sans-serif;
+  /* marca Transpanorama (canvas "Torre de Controle — Transpanorama", versão de 28/10): bordô, dourado, creme; Lato + Roboto */
+  --bg:#f7f5ef; --panel:#ffffff; --panel-2:#efebe2; --ink:#2d2d2d; --ink-2:#494c4f; --ink-3:#5f6366; --line:#e6e1d6; --line-2:#cfc8b8;
+  --brand:#530115; --brand-2:#4a1212; --title:#530115; --gold:#af8f28; --gold-ink:#7a6118; --gold-soft:#ded7ac;
+  --accent:#530115; --accent-ink:#ffffff; --accent-soft:#f2e8ea; --pri:#530115; --pri-ink:#ffffff;
+  --amber:#9a3f08; --amber-soft:#fce9dc; --red:#a3261b; --red-soft:#f9e1de; --green:#1f7a4d; --green-soft:#e2f1e8; --blue:#1456b8; --blue-soft:#e3ecf9; --gray-soft:#efebe2;
+  --shadow:0 1px 2px rgba(74,18,18,.05), 0 1px 3px rgba(74,18,18,.07); --shadow-lg:0 20px 50px -24px rgba(74,18,18,.45); --veu:rgba(45,8,14,.62);
+  --f:"Roboto","Segoe UI",Arial,sans-serif; --fh:"Lato","Segoe UI",Arial,sans-serif; --fm:"Roboto","Segoe UI",Arial,sans-serif;
   --r:10px; color-scheme:light;
 }
 :root[data-theme="dark"]{
-  --bg:#07101f; --panel:#0e1b30; --panel-2:#14243d; --ink:#e8edf5; --ink-2:#b4c0d2; --ink-3:#8f9cb1; --line:#1f3150; --line-2:#2d4266;
-  --brand:#061a3a; --title:#f1f4f9; --gold-ink:#e0c06a;
-  --accent:#7fa8ec; --accent-ink:#07101f; --accent-soft:#16294a; --pri:#c8a13a; --pri-ink:#1b1404;
-  --amber:#f4a26b; --amber-soft:#3a2213; --red:#ff8e80; --red-soft:#3d1a17; --green:#6fcf9b; --green-soft:#12301f; --blue:#7fa8ec; --blue-soft:#16294a; --gray-soft:#18273f;
-  --shadow:0 1px 2px rgba(0,0,0,.4); --shadow-lg:0 20px 50px -20px rgba(0,0,0,.7); color-scheme:dark;
+  --bg:#140c0d; --panel:#1f1416; --panel-2:#2a1c1e; --ink:#f3ece9; --ink-2:#cfc4c0; --ink-3:#a39894; --line:#3a2a2c; --line-2:#4d393b;
+  --brand:#3a0a14; --brand-2:#2c0a0f; --title:#f3ece9; --gold:#c9a743; --gold-ink:#dcc27a;
+  --accent:#e7a9b4; --accent-ink:#140c0d; --accent-soft:#3a1c22; --pri:#c9a743; --pri-ink:#1b1404;
+  --amber:#f4a26b; --amber-soft:#3a2213; --red:#ff8e80; --red-soft:#3d1a17; --green:#6fcf9b; --green-soft:#12301f; --blue:#7fa8ec; --blue-soft:#16294a; --gray-soft:#2a1c1e;
+  --shadow:0 1px 2px rgba(0,0,0,.4); --shadow-lg:0 20px 50px -20px rgba(0,0,0,.7); --veu:rgba(0,0,0,.66); color-scheme:dark;
 }
 *{box-sizing:border-box}
 html,body{height:100%}
@@ -39,25 +39,25 @@ button{cursor:pointer}
 .mono{font-family:var(--fm);font-weight:600;font-variant-numeric:tabular-nums;letter-spacing:.01em}
 .muted{color:var(--ink-3)}
 [hidden]{display:none!important}
-h1,h2,h3{font-family:var(--fh);font-weight:800;letter-spacing:-.005em;color:var(--title)}
+h1,h2,h3{font-family:var(--fh);font-weight:900;letter-spacing:-.005em;color:var(--title)}
 .eyebrow{display:block;margin-bottom:4px;font-size:12px;font-weight:700;letter-spacing:.18em;text-transform:uppercase;color:var(--gold-ink)}
 
 /* casca */
 .shell{display:grid;grid-template-columns:236px 1fr;min-height:100vh}
 .side{background:var(--brand);color:#dfe6f3;display:flex;flex-direction:column;gap:3px;padding:18px 12px;position:sticky;top:0;height:100vh}
 .brand{display:flex;gap:10px;align-items:center;padding:4px 8px 18px}
-.brand img{width:34px;height:34px;border-radius:9px}
+.brand img:not(.marca){width:34px;height:34px;border-radius:9px}
 .brand b{font-family:var(--fh);font-weight:700;font-size:14px;color:#fff;display:block;line-height:1.15}
-.marca{font-family:var(--fh);font-weight:800;font-size:17px;letter-spacing:.06em;color:#fff;display:block;line-height:1.1}
-.marca+i{display:block;width:70px;height:3px;background:var(--gold);margin:6px 0 6px}
+.marca{display:block;width:100%;max-width:196px;height:auto;margin:2px 0 10px}
+.side{border-right:3px solid var(--gold)}
 .brand small{font-size:11px;color:var(--gold);display:block;line-height:1.3}
-.nav{display:flex;align-items:center;gap:10px;border:0;background:transparent;color:#c9d3e6;padding:9px 10px;border-radius:8px;text-align:left;font-weight:500}
+.nav{display:flex;align-items:center;gap:10px;border:0;background:transparent;color:#ecdcdf;padding:9px 10px;border-radius:8px;text-align:left;font-weight:500}
 .nav:hover{background:rgba(255,255,255,.06);color:#fff}
-.nav.on{background:rgba(200,161,58,.18);color:#fff;box-shadow:inset 3px 0 0 var(--gold)}
+.nav.on{background:rgba(175,143,40,.22);color:#fff;box-shadow:inset 3px 0 0 var(--gold)}
 .nav svg{width:18px;height:18px;flex:none;stroke:currentColor;fill:none;stroke-width:1.8;stroke-linecap:round;stroke-linejoin:round}
 .nav .cnt{margin-left:auto;background:var(--red);color:#fff;border-radius:999px;font-size:11px;min-width:18px;height:18px;display:inline-grid;place-items:center;padding:0 5px}
 .side .grow{flex:1}
-.side .quem{font-size:12px;color:#c9d3e3;padding:8px 10px;border-top:1px solid rgba(255,255,255,.08)}
+.side .quem{font-size:12px;color:#ecdcdf;padding:8px 10px;border-top:1px solid rgba(255,255,255,.08)}
 .main{min-width:0;display:flex;flex-direction:column}
 .top{display:flex;align-items:center;gap:10px;padding:12px 24px;border-bottom:3px solid var(--gold);background:var(--panel);position:sticky;top:0;z-index:20;flex-wrap:wrap}
 .top h1{font-size:18px;margin:0;font-weight:800;flex:1;min-width:160px}
@@ -139,14 +139,14 @@ h1,h2,h3{font-family:var(--fh);font-weight:800;letter-spacing:-.005em;color:var(
 .tl-rh{display:flex;align-items:center;gap:12px;flex-wrap:wrap} .tl-rh>div{display:grid;min-width:0;flex:1 1 220px} .tl-rh b{font-family:var(--fh);font-size:17px;color:var(--title)}
 .tl-medidor{flex:1 1 200px;max-width:520px;height:12px;border-radius:6px;background:color-mix(in srgb,var(--g-manut) 22%,transparent);overflow:hidden} .tl-medidor i{display:block;height:100%;background:var(--green);border-radius:6px}
 .tl-pct{font-family:var(--fh);font-weight:800;font-size:18px}
-.tl-cards{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:10px}
+.tl-cards{display:grid;grid-template-columns:repeat(auto-fit,minmax(128px,1fr));gap:10px}
 .tl-card{display:grid;grid-template-columns:auto 1fr;grid-template-rows:auto auto auto;column-gap:10px;align-items:center;text-align:left;border:1px solid var(--line);border-left:4px solid var(--k);background:var(--panel);border-radius:10px;padding:10px 12px;cursor:pointer;font:inherit;color:inherit}
 .tl-card .tl-ico{grid-row:1/4;width:36px;height:36px;background:color-mix(in srgb,var(--k) 15%,transparent);color:var(--k)}
 .tl-card{grid-template-columns:auto minmax(0,1fr)} .tl-card b{font-family:var(--fh);font-weight:800;font-size:24px;line-height:1.05;color:var(--k)} .tl-card span:not(.tl-ico){font-weight:600;font-size:13px;line-height:1.25}
 @media (max-width:1700px){ .tl-cards .tl-card small{display:none} } .tl-card small{font-size:11px;color:var(--ink-3);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 .tl-card:hover{border-color:var(--k)} .tl-card.on{box-shadow:0 0 0 2px var(--k) inset} .tl-card.zero{opacity:.6}
 .tl{--esq:290px;overflow:auto;max-height:calc(100vh - 150px);padding:0}
-.tl-in{min-width:calc(var(--esq) + var(--n) * 28px);position:relative}
+.tl-in{min-width:calc(var(--esq) + var(--n) * 24px);position:relative}
 .tl-cab,.tl-rl,.tl-row{display:grid;grid-template-columns:var(--esq) minmax(0,1fr)}
 .tl-esq{position:sticky;left:0;z-index:3;background:var(--panel);border-right:1px solid var(--line);display:flex;align-items:center;gap:8px;padding:4px 10px;min-width:0}
 .tl-cab{position:sticky;top:0;z-index:6;background:var(--panel);border-bottom:1px solid var(--line)}
@@ -175,7 +175,7 @@ h1,h2,h3{font-family:var(--fh);font-weight:800;letter-spacing:-.005em;color:var(
 .tl-bar span,.fld .tl-bar span{overflow:hidden;text-overflow:ellipsis;color:inherit;font-size:inherit;font-weight:inherit}
 .fld .tl-regua span{font-size:10px;font-weight:400;color:var(--ink-3)}
 .tl-bar:hover{filter:brightness(1.12);z-index:2;outline:2px solid var(--ink);outline-offset:1px}
-.g-rodando{background:var(--g-rodando)} .g-parado{background:var(--g-parado);color:#0a2a5c} .g-manut{background:var(--g-manut)} .g-motorista{background:var(--g-motorista)} .g-ssma{background:var(--g-ssma)}
+.g-rodando{background:var(--g-rodando)} .g-parado{background:var(--g-parado);color:#10233f} .g-manut{background:var(--g-manut)} .g-motorista{background:var(--g-motorista)} .g-ssma{background:var(--g-ssma)}
 .g-vazio{background:repeating-linear-gradient(45deg,var(--amber-soft),var(--amber-soft) 4px,transparent 4px,transparent 8px);border:1px dashed var(--amber);color:var(--amber);box-shadow:none}
 .tl-leg{display:inline-block;width:22px;height:11px;border-radius:4px;margin-right:6px;vertical-align:-1px}
 .tl-regua{display:grid;grid-template-columns:repeat(var(--n),minmax(0,1fr));font-size:10px;color:var(--ink-3);text-align:left}
@@ -262,11 +262,13 @@ table.tb tbody tr:hover td{background:var(--panel-2)}
 .mini-mes i{height:18px;border-radius:3px;background:var(--gray-soft)}
 
 /* login */
-.login{min-height:100vh;display:grid;place-items:center;padding:24px;background:linear-gradient(180deg,#0a2a5c 0,#0a2a5c 52%,var(--bg) 52%)}
+.login{min-height:100vh;display:grid;place-items:center;padding:24px;background:linear-gradient(180deg,var(--brand-2) 0,var(--brand) 52%,var(--bg) 52%)}
 .login-card{width:min(420px,100%);padding:28px;display:grid;gap:14px;border-top:4px solid var(--gold)}
 .login-card .brand{padding:0}
 .login-card .brand b{color:var(--title)}
-.login-card .marca{color:var(--title)}
+.login-tema{position:absolute;top:14px;right:14px}
+.login-topo{position:relative;margin:-28px -28px 4px;padding:20px 28px 16px;background:var(--brand);border-radius:var(--r) var(--r) 0 0;border-bottom:3px solid var(--gold);display:grid;gap:4px}
+.login-topo .marca{max-width:240px;margin:0} .login-topo b{color:#fff;font-family:var(--fh);font-weight:900;font-size:15px} .login-topo small{color:var(--gold-soft);font-size:11.5px}
 .msg{font-size:13px;border-radius:8px;padding:8px 10px;background:var(--red-soft);color:var(--red)}
 .msg.ok{background:var(--green-soft);color:var(--green)}
 
@@ -333,8 +335,8 @@ table.tb tbody tr:hover td{background:var(--panel-2)}
 .pn-tn b{display:flex;align-items:center;gap:6px}
 
 /* passo a passo */
-#tour-luz{position:fixed;z-index:400;border:3px solid var(--gold);border-radius:12px;box-shadow:0 0 0 9999px rgba(6,26,58,.62);pointer-events:none;transition:all .25s ease}
-#tour-luz.cheio{inset:0;border:0;border-radius:0;box-shadow:none;background:rgba(6,26,58,.62)}
+#tour-luz{position:fixed;z-index:400;border:3px solid var(--gold);border-radius:12px;box-shadow:0 0 0 9999px var(--veu);pointer-events:none;transition:all .25s ease}
+#tour-luz.cheio{inset:0;border:0;border-radius:0;box-shadow:none;background:var(--veu)}
 #tour-caixa{position:fixed;z-index:401;background:var(--panel);color:var(--ink);border-radius:12px;border-top:4px solid var(--gold);box-shadow:var(--shadow-lg);padding:18px 20px;display:grid;gap:10px;transition:left .25s ease,top .25s ease}
 #tour-caixa.centro{left:50%;top:50%;transform:translate(-50%,-50%);width:min(480px,calc(100vw - 32px))}
 #tour-caixa.baixo,#tour-caixa.cima{left:12px;right:12px}
@@ -352,7 +354,7 @@ table.tb tbody tr:hover td{background:var(--panel-2)}
   .shell{grid-template-columns:minmax(0,1fr)}
   .bar input[type=search]{flex-basis:100%} .bar select{flex:1 1 140px;min-width:0}
   .side{position:static;height:auto;flex-direction:row;flex-wrap:nowrap;overflow-x:auto;align-items:center;padding:8px 10px;gap:2px}
-  .brand{padding:2px 8px 2px 2px;flex:none} .side .brand small,.side .brand b,.side .marca+i{display:none} .side .marca{font-size:14px}
+  .brand{padding:2px 8px 2px 2px;flex:none} .side .brand small,.side .brand b{display:none} .side .marca{width:150px;margin:0} .side{border-right:0;border-bottom:3px solid var(--gold)}
   .nav{flex:none;white-space:nowrap} .nav.on{box-shadow:inset 0 -3px 0 var(--gold)}
   .side .grow,.side .quem{display:none}
   .top{position:static;padding:10px 16px;flex-wrap:nowrap} .top h1{min-width:0;font-size:16px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap} .top .icon-btn>span{display:none}
@@ -381,8 +383,7 @@ table.tb tbody tr:hover td{background:var(--panel-2)}
 <!-- LOGIN -->
 <div id="login" class="login" hidden>
   <div class="card login-card">
-    <div style="display:flex;justify-content:flex-end"><button type="button" class="icon-btn" data-theme-btn aria-label="Tema"></button></div>
-    <div class="brand"><div><span class="marca">TRANSPANORAMA</span><i></i><b class="nome-sistema">Torre de Controle</b><small>Método Torre de Controle · Capacity Case</small></div></div>
+    <div class="login-topo"><button type="button" class="icon-btn login-tema" data-theme-btn aria-label="Tema"></button><img class="marca" src="logo-transpanorama.png" alt="Transpanorama" width="424" height="58"><b class="nome-sistema">Torre de Controle</b><small>Método Torre de Controle · Capacity Case</small></div>
     <div id="lg-entrar" style="display:grid;gap:12px">
       <div><h2 style="margin:0;font-size:20px">Entrar</h2><p class="muted" style="margin:2px 0 0">Disponibilidade da frota, dia a dia, num lugar só.</p></div>
       <label class="fld"><span>E-mail</span><input id="lg-email" type="email" autocomplete="username"></label>
@@ -405,7 +406,7 @@ table.tb tbody tr:hover td{background:var(--panel-2)}
 <!-- APP -->
 <div id="app" class="shell" hidden>
   <aside class="side">
-    <div class="brand"><div><span class="marca">TRANSPANORAMA</span><i></i><b>Torre de Controle</b><small>Desde 1986 · Maringá/PR</small></div></div>
+    <div class="brand"><div><img class="marca" src="logo-transpanorama.png" alt="Transpanorama" width="424" height="58"><b>Torre de Controle</b><small>Desde 1986 · Maringá/PR</small></div></div>
     <button type="button" class="nav" data-view="apresentacao"><svg viewBox="0 0 24 24"><path d="M4 5h16v11H4zM8 20h8M12 16v4"/></svg><span>Apresentação</span></button>
     <button type="button" class="nav" data-view="painel"><svg viewBox="0 0 24 24"><rect x="3" y="3" width="8" height="8" rx="1.5"/><rect x="13" y="3" width="8" height="5" rx="1.5"/><rect x="13" y="10" width="8" height="11" rx="1.5"/><rect x="3" y="13" width="8" height="8" rx="1.5"/></svg><span>Painel</span></button>
     <button type="button" class="nav" data-view="hoje"><svg viewBox="0 0 24 24"><path d="M3 7h11v9H3zM14 10h4l3 3v3h-7"/><circle cx="7" cy="17.5" r="1.8"/><circle cx="17" cy="17.5" r="1.8"/></svg><span>Hoje</span></button>
@@ -439,7 +440,7 @@ table.tb tbody tr:hover td{background:var(--panel-2)}
 <div id="modal-root"></div>
 
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.45.4/dist/umd/supabase.min.js"></script>
-<script src="app.js?v=202610281845"></script>
-<script src="acompanhante.js?v=202610281845"></script>
+<script src="app.js?v=202610282014"></script>
+<script src="acompanhante.js?v=202610282014"></script>
 </body>
 </html>
