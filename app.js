@@ -132,7 +132,10 @@ async function sessao(session){
   // quem é novo entra pela Apresentação; depois, pela última tela
   const visto = lsGet('frt_apresentacao:'+S.email, '');
   irPara(location.hash.replace('#','') || (visto ? lsGet('frt_view', 'hoje') : 'apresentacao'));
-  novidadesIniciar(); retornoIniciar();
+  // primeira vez: o passo a passo no lugar da faixa de novidades (quem é novo não precisa saber o que mudou)
+  if(!lsGet(tourChave(), '')){ novidadesCarregar().then(novMarcarVisto); setTimeout(()=> tourAbrir('primeira'), 600); }
+  else novidadesIniciar();
+  retornoIniciar();
   window.dispatchEvent(new CustomEvent('frt-entrou'));
 }
 
@@ -306,7 +309,7 @@ function renderApresentacao(){
       <h2>Saber, em um minuto, quantos conjuntos estão rodando hoje e quanto isso vai faturar no mês.</h2>
       <p>A torre lê a planilha de disponibilidade e o relatório de faturamento, junta os dois numa tela só e cria o lugar onde o programador lança o dia com um clique, do computador ou do celular.</p>
       <p class="efeito">Menos planilha, mais caminhão rodando.</p>
-      <div class="acts" style="margin-top:6px"><button class="btn gold" type="button" data-ir="hoje">Começar pela tela Hoje →</button><button class="btn" type="button" data-ir="quadro">Ver o Quadro do mês</button></div></div>
+      <div class="acts" style="margin-top:6px"><button class="btn gold" type="button" data-ir="hoje">Começar pela tela Hoje →</button><button class="btn" type="button" data-ir="quadro">Ver o Quadro do mês</button><button class="btn" type="button" id="sb-tour">Ver o passo a passo</button></div></div>
 
     <div class="sb-sec"><h3>Como a torre foi montada aqui</h3><div class="sb-cards">
       <div class="card sb-card"><div class="verbo">Lê</div><ul><li>A planilha "OUTUBRO - DISPONIBILIDADE" (11 abas): ${fN(nv)} conjuntos, ${ng} grids, 4 programadores, um status por dia.</li><li>O relatório de faturamento por CT-e que sai do sistema da transportadora (${fN(S.fatLinhas)} CT-e de outubro). O gestor importa o arquivo do jeito que ele vem, sem colar em aba nenhuma.</li><li>As metas por veículo de cada grid, da aba Gestão Frota, e as justificativas do Dashboard.</li></ul></div>
@@ -372,6 +375,7 @@ function renderApresentacao(){
   </div>`;
   $$('[data-ir]', v).forEach(b=> b.addEventListener('click', ()=> irPara(b.dataset.ir)));
   $('#sb-sug', v).addEventListener('click', ()=> window.FR_abrirBalao && window.FR_abrirBalao());
+  $('#sb-tour', v).addEventListener('click', ()=> tourAbrir('apresentacao'));
 }
 
 /* ---------- HOJE ---------- */
@@ -701,6 +705,94 @@ async function novidadesIniciar(){
     $('#btn-nov').classList.add('novo');
   }
 }
+
+/* ---------- PASSO A PASSO (primeiro acesso; depois, pelo botão "Passo a passo") ---------- */
+// Cada passo abre a tela certa e acende o pedaço dela de que fala. O texto muda conforme o perfil.
+const tourChave = ()=> 'frt_tour:' + S.email;
+const T = { i:0, passos:[], origem:'' };
+function tourPassos(){
+  const nome = ((S.membro && S.membro.nome) || '').split(' ')[0];
+  const pap = S.membro ? S.membro.papel : 'leitura';
+  const ult = sel => { const l = $$(sel); return l[l.length-1]; };
+  const perfil = pap==='admin' ? 'Seu acesso é de <b>Gestor</b>: você vê tudo, inclui pessoas na Equipe e importa o faturamento.'
+    : pap==='programador' ? 'Seu acesso é de <b>Programador</b>: você lança o status do dia dos seus conjuntos.'
+    : 'Seu acesso é de <b>Leitura</b>: você vê todas as telas com os dados reais, sem risco de mudar nada sem querer.';
+  return [
+    { t:`Olá${nome ? ', '+esc(nome) : ''}! Bem-vindo à ${esc(NOME)}`, x:`Aqui está a disponibilidade da frota de outubro e o faturamento × meta, com os dados reais da planilha. Em 1 minuto eu mostro onde fica cada coisa.<br><br>${perfil}` },
+    { v:'apresentacao', alvo:()=> $('.side'), t:'O menu', x:'Cada tela responde a uma pergunta. <b>Apresentação</b> explica o que é a torre e o que a planilha escondia. No celular, o menu fica no topo: arraste para o lado.' },
+    { v:'hoje', alvo:()=> $('#view-hoje .chips'), t:'Hoje: a frota em um minuto', x:'Quantos conjuntos estão rodando, parados, em manutenção, sem motorista ou sem lançamento. <b>Clique num número</b> para a lista mostrar só aqueles. A data no alto troca o dia.' },
+    { v:'hoje', alvo:()=> $('#view-hoje .cj'), t:'Um conjunto por linha', x:'Placa, grid, motorista, como estava ontem e o status de hoje. Quem está sem lançamento e quem está parado há mais tempo aparece primeiro.' + (pap==='leitura' ? ' Quem lança o status é o programador.' : ' Clique no status para mudar; <b>Igual a ontem</b> repete o dia anterior.') },
+    { v:'quadro', alvo:()=> $('#view-quadro .qd-wrap') || $('#view-quadro .card'), t:'Quadro do mês', x:'A aba Disponibilidade, em cores: um quadrinho por dia. As linhas de cima são o antigo Resumo. <b>Clique num número</b> do resumo para ver quais conjuntos são, ou num quadrinho para ver o dia daquele conjunto.' },
+    { v:'faturamento', alvo:()=> $('#view-faturamento .kpis'), t:'Faturamento × meta', x:'A meta do mês, quanto já deveria ter faturado até ontem, o que foi faturado e o <b>ritmo</b>. É a conta do Dashboard, por grid, sem fórmula para quebrar.' },
+    { v:'faturamento', alvo:()=> ult('#view-faturamento .tbl-wrap'), t:'Quem está fora do ritmo', x:'As placas críticas vêm primeiro, com os dias parados, o motivo e a justificativa. <b>Clique numa placa</b> para ver o mês inteiro dela.' },
+    { v:'sugestoes', alvo:()=> $('#ac-btn'), t:'Dúvida ou ideia? 💬', x:'Este botão fica em todas as telas. Dá para escrever, <b>falar</b> ou mandar um print. A resposta volta para você aqui, na tela Sugestões.' },
+    { t:'Pronto!', x:'Para rever este passo a passo, clique em <b>Passo a passo</b> no alto da tela.', fim:true } ];
+}
+function tourAbrir(origem){
+  tourFechar(true);
+  T.passos = tourPassos(); T.i = 0; T.origem = origem || 'botao'; window.FR_tour = true;
+  const sp = document.createElement('div'); sp.id = 'tour-luz'; sp.setAttribute('aria-hidden','true');
+  const cx = document.createElement('div'); cx.id = 'tour-caixa'; cx.setAttribute('role','dialog'); cx.setAttribute('aria-modal','true'); cx.setAttribute('aria-labelledby','tour-t');
+  document.body.append(sp, cx);
+  window.addEventListener('resize', tourPosicionar); window.addEventListener('scroll', tourPosicionar, true);
+  document.addEventListener('keydown', tourTecla);
+  window.FR_uso && window.FR_uso('tour', 'abriu', { origem:T.origem });
+  tourMostrar();
+}
+function tourTecla(e){ if(e.key==='Escape') tourFechar(); else if(e.key==='ArrowRight') tourIr(1); else if(e.key==='ArrowLeft') tourIr(-1); }
+function tourIr(d){
+  const n = T.i + d; if(n < 0) return;
+  if(n >= T.passos.length){ tourFechar(); return; }
+  T.i = n; tourMostrar();
+}
+async function tourMostrar(){
+  const p = T.passos[T.i], cx = $('#tour-caixa'); if(!cx) return;
+  if(p.v && S.view !== p.v) irPara(p.v);
+  let alvo = null;
+  if(p.alvo){ for(let k=0; k<20 && !(alvo = p.alvo()); k++) await new Promise(r=> setTimeout(r, 100)); }
+  if(!$('#tour-caixa') || T.passos[T.i] !== p) return;   // fechou ou andou enquanto esperava a tela
+  T.alvo = alvo;
+  if(alvo && alvo.id!=='ac-btn') alvo.scrollIntoView({ block:'nearest', inline:'nearest' });
+  const ult = T.i === T.passos.length-1;
+  cx.innerHTML = `<div class="tour-passo">${T.i===0 || ult ? 'Passo a passo' : `Passo ${T.i} de ${T.passos.length-2}`}</div>
+    <h3 id="tour-t">${p.t}</h3><p>${p.x}</p>
+    <div class="tour-pontos" aria-hidden="true">${T.passos.map((_,k)=>`<i${k===T.i?' class="on"':''}></i>`).join('')}</div>
+    <div class="tour-acts">${T.i===0 ? '<button type="button" class="btn" data-t="pular">Agora não</button>' : ult ? '' : '<button type="button" class="btn" data-t="pular">Pular</button><button type="button" class="btn" data-t="voltar">← Voltar</button>'}
+      ${T.i===0 ? '<button type="button" class="btn pri" data-t="ir">Começar →</button>' : ult ? '<button type="button" class="btn" data-t="apres">Ver a Apresentação</button><button type="button" class="btn pri" data-t="hoje">Ir para Hoje</button>' : '<button type="button" class="btn pri" data-t="ir">Próximo →</button>'}</div>`;
+  $$('[data-t]', cx).forEach(b=> b.addEventListener('click', ()=>{
+    const a = b.dataset.t;
+    if(a==='ir') tourIr(1); else if(a==='voltar') tourIr(-1);
+    else if(a==='pular'){ window.FR_uso && window.FR_uso('tour', 'pulou', { passo:T.i }); tourFechar(); }
+    else { tourFechar(); irPara(a==='apres' ? 'apresentacao' : 'hoje'); }
+  }));
+  tourPosicionar();
+  const foco = $('[data-t="ir"],[data-t="hoje"]', cx); if(foco) foco.focus({ preventScroll:true });
+}
+function tourPosicionar(){
+  const sp = $('#tour-luz'), cx = $('#tour-caixa'); if(!sp || !cx) return;
+  const a = T.alvo && T.alvo.isConnected ? T.alvo.getBoundingClientRect() : null;
+  const vw = innerWidth, vh = innerHeight, m = 8;
+  if(!a || !a.width){ sp.className = 'cheio'; sp.removeAttribute('style'); cx.className = 'centro'; cx.removeAttribute('style'); return; }
+  const r = { l:Math.max(4, a.left-m), t:Math.max(4, a.top-m) }; r.w = Math.min(vw-8, a.right+m) - r.l; r.h = Math.min(vh-8, a.bottom+m) - r.t;
+  sp.className = ''; Object.assign(sp.style, { left:r.l+'px', top:r.t+'px', width:r.w+'px', height:r.h+'px' });
+  if(vw < 700){ cx.className = 'baixo'; cx.removeAttribute('style'); if(r.t + r.h > vh*0.55) cx.className = 'cima'; return; }
+  // caixa ao lado do alvo quando cabe; senão embaixo ou em cima
+  cx.className = ''; const W = Math.min(400, vw-32), H = cx.offsetHeight || 240; let x, y;
+  if(r.l + r.w + W + 24 < vw){ x = r.l + r.w + 16; y = r.t; }
+  else if(r.t + r.h + H + 24 < vh){ x = r.l; y = r.t + r.h + 16; }
+  else if(r.t - H - 16 > 0){ x = r.l; y = r.t - H - 16; }
+  else { x = vw - W - 24; y = vh - H - 24; }
+  x = Math.min(Math.max(16, x), vw - W - 16); y = Math.min(Math.max(16, y), vh - H - 16);
+  Object.assign(cx.style, { left:x+'px', top:y+'px', width:W+'px' });
+}
+function tourFechar(silencio){
+  const cx = $('#tour-caixa'); if(!cx) return;
+  if(!silencio){ lsSet(tourChave(), new Date().toISOString()); window.FR_uso && window.FR_uso('tour', 'fechou', { passo:T.i, de:T.passos.length }); }
+  cx.remove(); const sp = $('#tour-luz'); if(sp) sp.remove(); T.alvo = null; window.FR_tour = false;
+  window.removeEventListener('resize', tourPosicionar); window.removeEventListener('scroll', tourPosicionar, true);
+  document.removeEventListener('keydown', tourTecla);
+}
+$('#btn-tour').addEventListener('click', ()=> tourAbrir('botao'));
 
 /* ---------- partida ---------- */
 window.FR = { sb, get email(){ return S.email; }, get nome(){ return (S.membro&&S.membro.nome) || S.email.split('@')[0]; }, view:()=>S.view, titulo:()=>TITULOS[S.view], irPara };

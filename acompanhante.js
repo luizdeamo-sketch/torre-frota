@@ -92,7 +92,7 @@ function montar(){
   document.body.appendChild(root);
   document.getElementById('ac-btn').onclick = ()=> abrirCaixa('botao', '');
 }
-const ocupado = ()=> !!document.querySelector('#modal-root .modal-bg') || !document.getElementById('ac-box').hidden || ac.rec;
+const ocupado = ()=> !!window.FR_tour || !!document.querySelector('#modal-root .modal-bg') || !document.getElementById('ac-box').hidden || ac.rec;
 function fecharBalao(como){ const b = document.getElementById('ac-bubble'); clearTimeout(ac.timer); if(!b.hidden){ b.hidden = true; uso('balao', ac.motivo, { evento:'fechou', resposta:como }); } }
 function mostrarBalao(motivo, pergunta){
   montar(); if(!email() || SEM_BALAO.includes(email()) || ocupado() || document.getElementById('app').hidden) return false;
@@ -110,6 +110,7 @@ function mostrarBalao(motivo, pergunta){
 function duvida(motivo){ if(Date.now()-ac.ultimaDuvida < 900000) return; setTimeout(()=>{ if(Date.now()-ac.ultimaDuvida < 900000) return; if(mostrarBalao(motivo, PERGUNTA[motivo])) ac.ultimaDuvida = Date.now(); }, 1500); }
 window.FR_duvida = duvida;
 window.FR_abrirBalao = ()=> abrirCaixa('botao', '');
+window.FR_uso = uso;   // o passo a passo registra se a pessoa foi até o fim
 
 function abrirCaixa(motivo, pergunta){
   montar(); const bx = document.getElementById('ac-box'); if(!bx.hidden) return;
