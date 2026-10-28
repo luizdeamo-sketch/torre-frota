@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
-<meta name="app-build" content="202610281757">
+<meta name="app-build" content="202610281845">
 <title>Torre de Controle - Transpanorama</title>
 <link rel="icon" href="logo.svg" type="image/svg+xml">
 <link rel="preconnect" href="https://fonts.googleapis.com">
@@ -104,17 +104,19 @@ h1,h2,h3{font-family:var(--fh);font-weight:800;letter-spacing:-.005em;color:var(
 
 /* Hoje: lista de conjuntos */
 .lista{display:grid;gap:8px}
-.cj{display:grid;grid-template-columns:minmax(210px,1.1fr) minmax(170px,1fr) minmax(240px,1.4fr) auto;gap:12px;align-items:center;padding:10px 14px}
+.cj{display:grid;grid-template-columns:minmax(210px,1.1fr) minmax(170px,1fr) minmax(240px,1.4fr) auto;gap:12px;align-items:center;padding:8px 14px;box-shadow:none}
 .cj .pl{font-family:var(--fm);font-weight:600;font-size:14px}
 .cj .linha2{font-size:12px;color:var(--ink-3)}
 .st-btn{display:flex;align-items:center;gap:8px;border:1px solid var(--line-2);background:var(--panel);border-radius:9px;padding:7px 10px;text-align:left;width:100%;min-height:42px}
 .st-btn:hover{border-color:var(--ink-3)}
 .st-btn .dot{width:12px;height:12px;border-radius:4px;flex:none;background:var(--line-2)}
-.st-btn.vazio{border-style:dashed;border-color:var(--amber);background:var(--amber-soft);color:var(--amber);font-weight:600}
+.st-btn.vazio{border-style:dashed;border-color:var(--amber);background:var(--panel);color:var(--amber);font-weight:600}
+.st-btn.vazio .dot{background:transparent;border:2px dashed var(--amber)}
 .cj .ontem{font-size:12px;color:var(--ink-3)}
 .cj .sinal{font-size:11.5px;font-weight:600}
 .cj .sinal.red{color:var(--red)} .cj .sinal.amber{color:var(--amber)}
-.grupo-h{display:flex;align-items:center;gap:8px;margin:6px 2px 0;font-weight:600;color:var(--ink-2)}
+.grupo-h{display:flex;align-items:center;gap:8px;margin:10px 2px 2px;flex-wrap:wrap} .grupo-h b{font-family:var(--fh);font-size:15px;color:var(--title)} .grupo-h .sub{font-size:12px}
+.lista .grupo-h:first-child{margin-top:0}
 
 /* seletor de status */
 .st-grid{display:grid;gap:10px}
@@ -140,7 +142,8 @@ h1,h2,h3{font-family:var(--fh);font-weight:800;letter-spacing:-.005em;color:var(
 .tl-cards{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:10px}
 .tl-card{display:grid;grid-template-columns:auto 1fr;grid-template-rows:auto auto auto;column-gap:10px;align-items:center;text-align:left;border:1px solid var(--line);border-left:4px solid var(--k);background:var(--panel);border-radius:10px;padding:10px 12px;cursor:pointer;font:inherit;color:inherit}
 .tl-card .tl-ico{grid-row:1/4;width:36px;height:36px;background:color-mix(in srgb,var(--k) 15%,transparent);color:var(--k)}
-.tl-card b{font-family:var(--fh);font-weight:800;font-size:24px;line-height:1.05;color:var(--k)} .tl-card span:not(.tl-ico){font-weight:600;font-size:13px} .tl-card small{font-size:11px;color:var(--ink-3)}
+.tl-card{grid-template-columns:auto minmax(0,1fr)} .tl-card b{font-family:var(--fh);font-weight:800;font-size:24px;line-height:1.05;color:var(--k)} .tl-card span:not(.tl-ico){font-weight:600;font-size:13px;line-height:1.25}
+@media (max-width:1700px){ .tl-cards .tl-card small{display:none} } .tl-card small{font-size:11px;color:var(--ink-3);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 .tl-card:hover{border-color:var(--k)} .tl-card.on{box-shadow:0 0 0 2px var(--k) inset} .tl-card.zero{opacity:.6}
 .tl{--esq:290px;overflow:auto;max-height:calc(100vh - 150px);padding:0}
 .tl-in{min-width:calc(var(--esq) + var(--n) * 28px);position:relative}
@@ -186,8 +189,8 @@ h1,h2,h3{font-family:var(--fh);font-weight:800;letter-spacing:-.005em;color:var(
 
 /* faturamento */
 .kpis{display:grid;grid-template-columns:repeat(auto-fit,minmax(200px,1fr));gap:10px}
-.kpi{padding:14px 16px;border-top:4px solid var(--brand)}
-:root[data-theme="dark"] .kpi{border-top-color:var(--gold)}
+.kpi{padding:14px 16px;border-left:4px solid var(--k,var(--brand))}
+:root[data-theme="dark"] .kpi{--k:var(--gold)}
 .kpi small{display:block;color:var(--ink-3);font-size:12px}
 .kpi b{font-family:var(--fh);font-size:24px;font-weight:800;color:var(--title)}
 .kpi .sub{margin-top:2px}
@@ -319,6 +322,16 @@ table.tb tbody tr:hover td{background:var(--panel-2)}
   .pn-tl{grid-template-columns:minmax(0,1fr) 80px} .pn-tl .pn-tb{grid-column:1/-1;grid-row:2}
 }
 
+/* situação no Faturamento */
+.k-critico{--k:var(--red)} .k-atencao{--k:var(--amber)} .k-ok{--k:var(--green)}
+/* filtros: no celular, só data e busca; o resto em "Mais filtros" */
+.bar-mais{display:none}
+/* custo da parada */
+.pn-h h3{display:flex;align-items:center;gap:8px}
+.pn-ct{display:flex;align-items:baseline;gap:10px;flex-wrap:wrap} .pn-ct b{font-family:var(--fh);font-weight:800;font-size:30px;color:var(--red)} .pn-ct span{color:var(--ink-2)}
+.pn-custo .pn-tl{grid-template-columns:minmax(240px,1.2fr) minmax(0,1.6fr) 96px}
+.pn-tn b{display:flex;align-items:center;gap:6px}
+
 /* passo a passo */
 #tour-luz{position:fixed;z-index:400;border:3px solid var(--gold);border-radius:12px;box-shadow:0 0 0 9999px rgba(6,26,58,.62);pointer-events:none;transition:all .25s ease}
 #tour-luz.cheio{inset:0;border:0;border-radius:0;box-shadow:none;background:rgba(6,26,58,.62)}
@@ -349,6 +362,8 @@ table.tb tbody tr:hover td{background:var(--panel-2)}
 }
 @media (max-width:640px){
   .cj{grid-template-columns:1fr;gap:8px}
+  .bar-mais{display:inline-flex;margin-left:auto} .bar:not(.aberta) select:not(#f-mes){display:none}
+  .pn-custo .pn-tl{grid-template-columns:minmax(0,1fr) 84px} .pn-custo .pn-tb{grid-column:1/-1;grid-row:2} .pn-ct b{font-size:24px}
   .form,.eq-form{grid-template-columns:1fr}
   .chips{grid-template-columns:repeat(2,minmax(0,1fr))}
   .sb-hero{padding:20px} .sb-hero h2{font-size:23px}
@@ -357,7 +372,7 @@ table.tb tbody tr:hover td{background:var(--panel-2)}
   .tl-res{display:none}
   .tl-row{grid-template-columns:1fr;padding:6px 8px 2px} .tl-esq{position:static;border-right:0;padding:2px 0;background:transparent}
   .tl-trilha{min-height:20px;margin:4px 0 6px} .tl-bar span,.tl-bar i{display:none} .tl-bar{border-radius:4px;padding:0}
-  .tl-fundo{left:0} .tl-cards{grid-template-columns:repeat(2,minmax(0,1fr))} .tl-card b{font-size:20px}
+  .tl-fundo{left:0} .tl-cards{display:flex;overflow-x:auto;scroll-snap-type:x proximity;padding-bottom:4px} .tl-card{flex:0 0 150px;scroll-snap-align:start} .tl-card b{font-size:20px}
 }
 </style>
 </head>
@@ -424,7 +439,7 @@ table.tb tbody tr:hover td{background:var(--panel-2)}
 <div id="modal-root"></div>
 
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.45.4/dist/umd/supabase.min.js"></script>
-<script src="app.js?v=202610281757"></script>
-<script src="acompanhante.js?v=202610281757"></script>
+<script src="app.js?v=202610281845"></script>
+<script src="acompanhante.js?v=202610281845"></script>
 </body>
 </html>

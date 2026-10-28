@@ -232,6 +232,7 @@ function barraFiltros(comDia){
     <select id="f-prog" aria-label="Programador">${opt(S.progs, F.prog, 'Todos os programadores', p=> p.charAt(0)+p.slice(1).toLowerCase())}</select>
     <select id="f-grid" aria-label="Grid">${opt(Object.keys(S.grids), F.grid, 'Todos os grids', g=> S.grids[g].nome)}</select>
     <select id="f-op" aria-label="Operação">${opt(ops, F.op, 'Todas as operações')}</select>
+    <button type="button" class="btn sm bar-mais" data-filtros aria-expanded="${!!(F.prog||F.grid||F.op)}">${F.prog||F.grid||F.op ? 'Filtros ativos ▴' : 'Mais filtros ▾'}</button>
   </div>`;
 }
 function ligarFiltros(v, rerender){
@@ -243,6 +244,8 @@ function ligarFiltros(v, rerender){
   const fd = $('#f-dia', v); if(fd){ fd.addEventListener('change', ()=>{ if(fd.value){ S.dia = fd.value; rerender(); } });
     $$('[data-dia]', v).forEach(x=> x.addEventListener('click', ()=>{ const n = somaDias(S.dia, +x.dataset.dia); if(n.slice(0,7)===S.mes){ S.dia = n; rerender(); } }));
     $('#f-hoje', v).addEventListener('click', ()=>{ const h = hojeISO(); S.dia = h.slice(0,7)===S.mes ? h : diaDoMes(S.mes, diasDoMes(S.mes)); rerender(); }); }
+  const bm = $('[data-filtros]', v); if(bm){ const bar = bm.closest('.bar'); bar.classList.toggle('aberta', bm.getAttribute('aria-expanded')==='true');
+    bm.addEventListener('click', ()=>{ const ab = !bar.classList.contains('aberta'); bar.classList.toggle('aberta', ab); bm.setAttribute('aria-expanded', ab); bm.textContent = ab ? 'Menos filtros ▴' : 'Mais filtros ▾'; }); }
   const fm = $('#f-mes', v); if(fm) fm.addEventListener('change', async ()=>{ S.mes = fm.value; lsSet('frt_mes', S.mes); S.dia = S.mes===hojeISO().slice(0,7) ? hojeISO() : diaDoMes(S.mes, diasDoMes(S.mes)); await carregarMes(); rerender(); });
 }
 
@@ -413,15 +416,15 @@ function renderHoje(){
   const lista = base.slice().sort((a,b)=> peso(a)-peso(b) || a.placa.localeCompare(b.placa));
   const vazios = semChip.filter(x=> grupoDe(x.placa,dia)==='vazio');
   const comOntem = vazios.filter(x=> reg(x.placa, somaDias(dia,-1)) && reg(x.placa, somaDias(dia,-1)).status);
-  v.innerHTML = `<div class="head"><div><h2>${esc(fDia(dia))}</h2><p>${F.prog?`Caminhões de ${esc(F.prog.charAt(0)+F.prog.slice(1).toLowerCase())}. `:''}${fN(semChip.length)} conjuntos · ${fP(semChip.length?nDisp/semChip.length:0)} disponíveis${futuro?' · dia futuro: dá para deixar marcado o que já se sabe (férias, manutenção).':''}</p></div>
+  v.innerHTML = `<div class="head"><div><span class="eyebrow">Hoje · o lançamento do dia</span><h2>${esc(fDia(dia))}</h2><p>${F.prog?`Caminhões de ${esc(F.prog.charAt(0)+F.prog.slice(1).toLowerCase())}. `:''}${fN(semChip.length)} conjuntos · ${fP(semChip.length?nDisp/semChip.length:0)} disponíveis${futuro?' · dia futuro: dá para deixar marcado o que já se sabe (férias, manutenção).':''}</p></div>
       <div class="acts">${comOntem.length && podeEscrever() ? `<button class="btn pri" type="button" id="h-repetir" title="Copia o status de ontem nos conjuntos que ainda não foram lançados hoje">Repetir ontem nos ${comOntem.length} sem lançamento</button>` : ''}</div></div>
     ${barraFiltros(true)}
-    <div class="chips">
-      <button class="chip k-green" type="button" data-chip="disp" aria-pressed="${F.chip==='disp'}" title="Rodando ou parado com cota: pode carregar"><b>${nDisp}</b><span>Disponíveis</span><small>de ${semChip.length} conjuntos</small></button>
-      ${GRUPOS.map(g=>`<button class="chip k-${g.cor}" type="button" data-chip="${g.k}" aria-pressed="${F.chip===g.k}" title="${esc(g.desc)}"><b>${cont(g.k)}</b><span>${esc(g.nome)}</span><small>${esc(g.curto)}</small></button>`).join('')}
+    <div class="tl-cards">
+      <button class="tl-card k-disp ${F.chip==='disp'?'on':''}" type="button" data-chip="disp" aria-pressed="${F.chip==='disp'}" title="Rodando ou parado com cota: pode carregar"><span class="tl-ico">${ICO.disp}</span><b>${nDisp}</b><span>Disponíveis</span><small>de ${semChip.length} conjuntos</small></button>
+      ${GRUPOS.map(g=>{ const c = cont(g.k); return `<button class="tl-card k-${g.k} ${c?'':'zero'} ${F.chip===g.k?'on':''}" type="button" data-chip="${g.k}" aria-pressed="${F.chip===g.k}" title="${esc(g.desc)}"><span class="tl-ico">${ICO[g.k]}</span><b>${c}</b><span>${esc(g.nome)}</span><small>${esc(g.curto)}</small></button>`; }).join('')}
     </div>
     ${F.chip?`<div class="filtros-ativos"><button type="button" id="h-xchip">${esc(F.chip==='disp'?'Disponíveis':GRUPOS.find(g=>g.k===F.chip).nome)} ✕</button></div>`:''}
-    <div class="lista" id="h-lista">${lista.length ? lista.slice(0, 300).map(x=> linhaHoje(x, dia)).join('') : '<div class="card empty">Nenhum conjunto com esses filtros.</div>'}</div>`;
+    <div class="lista" id="h-lista">${lista.length ? listaHoje(lista.slice(0, 300), dia) : '<div class="card empty">Nenhum conjunto com esses filtros.</div>'}</div>`;
   ligarFiltros(v, renderHoje);
   $$('[data-chip]', v).forEach(b=> b.addEventListener('click', ()=>{ F.chip = F.chip===b.dataset.chip ? '' : b.dataset.chip; renderHoje(); }));
   const xc = $('#h-xchip', v); if(xc) xc.addEventListener('click', ()=>{ F.chip = ''; renderHoje(); });
@@ -436,11 +439,22 @@ function renderHoje(){
     (data||[]).forEach(r=> S.dias.set(r.placa+'|'+r.dia, r)); toast(linhas.length+' conjuntos com o status de ontem. Confira os que mudaram.'); renderHoje();
   });
 }
+// a lista da Hoje em blocos, na ordem do que precisa de ação: sem lançamento, parados, disponível parado, rodando
+function listaHoje(lista, dia){
+  const BLOCO = { vazio:['vazio','Sem lançamento','ninguém informou o dia ainda'], manut:['manut','Parados','manutenção, motorista ou SSMA, os há mais tempo primeiro'], motorista:['manut'], ssma:['manut'],
+    parado:['parado','Disponível parado','sem cota ou descanso'], rodando:['rodando','Rodando','carregando, em viagem, descarregando ou voltando'] };
+  const cont = {}; lista.forEach(x=>{ const b = BLOCO[grupoDe(x.placa, dia)][0]; cont[b] = (cont[b]||0)+1; });
+  let atual = '', out = '';
+  lista.forEach(x=>{ const b = BLOCO[grupoDe(x.placa, dia)][0];
+    if(b!==atual){ atual = b; const d = BLOCO[b]; out += `<div class="grupo-h"><span class="tl-ico mini k-${b}">${ICO[b]}</span><b>${esc(d[1])}</b><span class="tag">${cont[b]}</span><span class="sub">${esc(d[2])}</span></div>`; }
+    out += linhaHoje(x, dia); });
+  return out;
+}
 function linhaHoje(x, dia){
   const r = reg(x.placa, dia) || {}, st = r.status ? S.status[r.status] : null, o = reg(x.placa, somaDias(dia,-1)), ost = o && o.status ? S.status[o.status] : null;
   const n = diasNoStatus(x.placa, dia), g = st ? GRUPO_DE[st.grupo] : 'vazio';
   let sinal = '';
-  if(!st) sinal = dia <= hojeISO() ? '<span class="sinal amber">⚠ sem lançamento</span>' : '';
+  if(!st) sinal = '';   // o bloco "Sem lançamento" já diz isso; repetir em cada linha só polui
   else if((g==='manut' && n>3) || (g==='motorista' && r.status==='I|SEM MOTORISTA')) sinal = `<span class="sinal red">● ${n} dias ${g==='manut'?'em manutenção':'sem motorista'}</span>`;
   else if(n>1) sinal = `<span class="sub">há ${n} dias${n>=60?'+':''}</span>`;
   return `<div class="card cj">
@@ -464,6 +478,9 @@ const ICO = {
   ssma:'<svg viewBox="0 0 24 24"><path d="M12 3l7 3v5c0 4.5-3 8.3-7 10-4-1.7-7-5.5-7-10V6z"/><path d="M9 12l2 2 4-4"/></svg>',
   vazio:'<svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="M9.6 9.3a2.5 2.5 0 0 1 4.8.9c0 1.7-2.4 2.2-2.4 3.6M12 17h.01"/></svg>',
   disp:'<svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="M8 12.5l2.6 2.6L16 9.5"/></svg>',
+  alerta:'<svg viewBox="0 0 24 24"><path d="M12 3l9.5 17h-19z"/><path d="M12 10v4.5M12 17.5h.01"/></svg>',
+  relogio:'<svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/></svg>',
+  dinheiro:'<svg viewBox="0 0 24 24"><rect x="2.5" y="6" width="19" height="12" rx="2"/><circle cx="12" cy="12" r="2.6"/><path d="M6 9.5v5M18 9.5v5"/></svg>',
   frota:'<svg viewBox="0 0 24 24"><path d="M1 6h12v10H1zM13 9h5l4 4v3h-9"/><circle cx="5" cy="17.5" r="2"/><circle cx="17" cy="17.5" r="2"/></svg>' };
 const ORDEM_G = ['rodando','parado','manut','motorista','ssma','vazio'];
 const nomeG = g => g==='vazio' ? 'Sem lançamento' : (GRUPOS.find(x=>x.k===g)||{}).nome || g;
@@ -574,7 +591,7 @@ function modalTrecho(placa, i0, i1){
 
 /* ---------- PAINEL (o antigo Dashboard, em gráficos; mesmos números das outras telas) ---------- */
 // cores dos grupos nos gráficos: manutenção, motorista e SSMA precisam se distinguir (nas chips os três são vermelhos)
-const COR_G = { rodando:'#1456b8', parado:'#8fb4e8', manut:'#a3261b', motorista:'#d9822b', ssma:'#6b3fa0', vazio:'#c5cbd4' };
+const COR_G = { rodando:'var(--g-rodando)', parado:'var(--g-parado)', manut:'var(--g-manut)', motorista:'var(--g-motorista)', ssma:'var(--g-ssma)', vazio:'var(--g-vazio)' };
 function renderPainel(){
   const v = $('#view-painel'), n = diasDoMes(S.mes), hoje = hojeISO(), g = S.pnGrid || '';
   const veic = S.veic.filter(x=> !g || x.grid===g), N = veic.length;
@@ -595,6 +612,8 @@ function renderPainel(){
   const tot = fl.reduce((a,l)=>({ meta:a.meta+l.meta, esp:a.esp+l.esp, fat:a.fat+l.fat }), { meta:0, esp:0, fat:0 });
   const fatTot = tot.fat + (g ? 0 : S.fatFora), ritmo = tot.esp ? fatTot/tot.esp : null;
   const crit = fl.filter(l=> l.sit==='critico').length;
+  const prev = refDia() ? fatTot / refDia() * n : null;   // fecha o mês no ritmo dos dias que já passaram
+  const custo = custoParada(veic, n, hoje), custoTot = custo.reduce((a,c)=> a + c.valor, 0), maxC = Math.max(1, ...custo.map(c=> c.valor));
   const porGrid = Object.keys(S.grids).map(k=>{ const ls = todas.filter(l=>l.x.grid===k); const s = ls.reduce((a,l)=>({ meta:a.meta+l.meta, esp:a.esp+l.esp, fat:a.fat+l.fat }), { meta:0, esp:0, fat:0 }); return { k, n:ls.length, ...s, rit: s.esp ? s.fat/s.esp : null }; });
   const maxG = Math.max(1, ...porGrid.map(r=> Math.max(r.meta, r.fat)));
   const top = fl.filter(l=> l.gap > 0).sort((a,b)=> b.gap - a.gap).slice(0, 10), maxGap = Math.max(1, ...top.map(l=> l.gap));
@@ -611,10 +630,18 @@ function renderPainel(){
       <button type="button" class="card kpi pn-k" data-pn="hoje"><small>Disponíveis ${hj && hj.d===hoje ? 'hoje' : hj ? 'em '+esc(fDia(hj.d)) : ''}</small><b>${hj ? fN(hj.disp) : '–'}</b><div class="sub">de ${fN(N)} conjuntos · ${fP(hj ? hj.disp/N : null)}${aberto ? ` · ${aberto.d===hoje?'hoje':esc(fDia(aberto.d))}: ${aberto.lanc} de ${N} lançados` : hj && hj.c.vazio ? ` · ${hj.c.vazio} sem lançamento` : ''}</div></button>
       <button type="button" class="card kpi pn-k" data-pn="quadro"><small>Disponibilidade média do mês</small><b>${fP(media)}</b><div class="sub">nos ${comDado.length} dias lançados</div></button>
       <button type="button" class="card kpi pn-k" data-pn="fat"><small>Ritmo do faturamento</small><b style="color:${corRit(ritmo)}">${fP(ritmo)}</b><div class="sub">${fRk(fatTot)} de ${fRk(tot.esp)} esperados até o dia ${refDia()}</div></button>
-      <button type="button" class="card kpi pn-k" data-pn="fat"><small>Falta para a meta do mês</small><b>${fRk(Math.max(0, tot.meta - fatTot))}</b><div class="sub">meta ${fRk(tot.meta)} · ${fP(tot.meta ? fatTot/tot.meta : null)} feito</div></button>
+      <button type="button" class="card kpi pn-k" data-pn="fat" title="Estimativa: o faturado até agora dividido pelos dias que passaram, vezes os dias do mês"><small>Previsão de fechamento</small><b style="color:${corRit(prev!=null && tot.meta ? prev/tot.meta : null)}">${fRk(prev)}</b><div class="sub">${fP(prev!=null && tot.meta ? prev/tot.meta : null)} da meta de ${fRk(tot.meta)} · estimativa no ritmo atual</div></button>
       <button type="button" class="card kpi pn-k" data-pn="crit"><small>Placas críticas</small><b style="color:var(--red)">${fN(crit)}</b><div class="sub">abaixo de 50% do ritmo</div></button>
     </div>
     <div class="pn-grade">
+      <section class="card pn-card pn-largo pn-custo"><div class="pn-h"><h3><span class="tl-ico mini k-manut">${ICO.dinheiro}</span> Quanto a parada custou no mês</h3><span class="sub">cada dia parado vale a meta do dia do conjunto · clique num motivo para ver os conjuntos</span></div>
+        <div class="pn-ct"><b>${fRk(custoTot)}</b><span>de meta deixaram de entrar${g?' em '+esc(S.grids[g].nome):''} por conjunto parado, até ${esc(dm(hoje > diaDoMes(S.mes,n) ? diaDoMes(S.mes,n) : hoje))}.</span></div>
+        <div class="pn-top">${custo.slice(0, 8).map((c,i)=>`<button type="button" class="pn-tl" data-custo="${i}">
+          <span class="pn-tn"><b><span class="tl-ico mini k-${c.g}">${ICO[c.g]}</span> ${esc(c.nome)}</b><span class="sub">${fN(c.dias)} dias de conjunto parado · ${c.placas.size} conjuntos</span></span>
+          <span class="pn-tb"><i style="width:${c.valor/maxC*100}%;background:${COR_G[c.g]}"></i></span><b class="pn-tv" style="color:var(--ink)">${fRk(c.valor)}</b></button>`).join('') || '<div class="empty">Nenhum dia parado no mês.</div>'}</div>
+        <p class="sub" style="margin:0">É a meta que deixou de entrar, não o prejuízo contábil. Conta: meta do mês do conjunto ÷ dias do mês, por dia parado, a partir do dia em que ele entrou na frota.</p>
+      </section>
+
       <section class="card pn-card pn-largo"><div class="pn-h"><h3>Disponibilidade dia a dia</h3><span class="sub">% dos ${fN(N)} conjuntos rodando ou parados com cota${media!=null?` · tracejado = média do mês (${fP(media)})`:''}${aberto?` · ${aberto.d===hoje?'hoje':esc(fDia(aberto.d))} ainda em lançamento, fora da conta`:''}</span></div>
         <div class="pn-linha">
           <div class="pn-eixo" aria-hidden="true"><span>100%</span><span>75%</span><span>50%</span><span>25%</span><span>0%</span></div>
@@ -657,10 +684,33 @@ function renderPainel(){
   $$('[data-res]', v).forEach(b=> b.addEventListener('click', ()=>{ const [k,d] = b.dataset.res.split('|'); S.f.res = { g:k, dia:d }; S.f.grid = g; S.f.prog = ''; S.f.chip = ''; irPara('quadro'); }));
   $$('[data-grid]', v).forEach(b=> b.addEventListener('click', ()=>{ S.fatF.grid = b.dataset.grid; S.fatF.sit = ''; irPara('faturamento'); }));
   $$('[data-ficha]', v).forEach(b=> b.addEventListener('click', ()=> abrirFicha(b.dataset.ficha)));
+  $$('[data-custo]', v).forEach(b=> b.addEventListener('click', ()=> modalCusto(custo[+b.dataset.custo])));
   $$('[data-pn]', v).forEach(b=> b.addEventListener('click', ()=>{ const a = b.dataset.pn;
     if(a==='hoje'){ S.f.chip = 'disp'; S.f.grid = g; S.f.prog = ''; irPara('hoje'); }
     else if(a==='quadro'){ S.f.res = null; S.f.grid = g; irPara('quadro'); }
     else { S.fatF.grid = g; S.fatF.sit = a==='crit' ? 'critico' : ''; irPara('faturamento'); } }));
+}
+
+// dia parado custa a meta do dia do conjunto (meta proporcional: só conta depois que ele entrou na frota)
+function custoParada(veic, n, hoje){
+  const por = {};
+  veic.forEach(x=>{
+    const base = S.metas[S.mes+'|'+x.grid] || 0, dia = base / n; let entrou = false;
+    for(let d=1; d<=n; d++){ const s = diaDoMes(S.mes, d); if(s > hoje) break; const st = stDe(x.placa, s); if(st) entrou = true; if(!entrou || !st || st.disponivel) continue;
+      const k = st.nome, c = por[k] || (por[k] = { nome:k, g:GRUPO_DE[st.grupo], dias:0, valor:0, placas:new Map() });
+      c.dias++; c.valor += dia; const pc = c.placas.get(x.placa) || { dias:0, valor:0 }; pc.dias++; pc.valor += dia; c.placas.set(x.placa, pc); }
+  });
+  return Object.values(por).sort((a,b)=> b.valor - a.valor);
+}
+function modalCusto(c){
+  if(!c) return;
+  const ls = [...c.placas.entries()].sort((a,b)=> b[1].valor - a[1].valor);
+  abrirModal(`<div class="modal-h"><div><h3><span class="tl-ico k-${c.g}" style="vertical-align:-6px">${ICO[c.g]}</span> ${esc(c.nome)}: ${fRk(c.valor)}</h3><div class="sub">${fN(c.dias)} dias de conjunto parado em ${ls.length} conjuntos · clique num conjunto para abrir o cadastro</div></div><button class="x" data-close aria-label="Fechar">✕</button></div>
+    <div class="modal-b"><div class="tr-dias">${ls.map(([p,v])=>{ const x = S.veic.find(y=>y.placa===p) || {};
+      return `<button type="button" class="tr-dia" data-ficha="${esc(p)}" style="grid-template-columns:90px minmax(0,1fr) auto"><b class="mono">${esc(p)}</b><span>${esc(x.motorista||'sem motorista')} · <span class="sub">${esc((S.grids[x.grid]||{}).nome||'')}</span></span><span><b>${v.dias}</b> ${v.dias>1?'dias':'dia'} · <b class="mono">${fRk(v.valor)}</b></span></button>`; }).join('')}</div></div>
+    <div class="modal-f"><button class="btn" type="button" data-close>Fechar</button></div>`, bg=>{
+    $$('[data-ficha]', bg).forEach(b=> b.addEventListener('click', ()=>{ fecharModal(); abrirFicha(b.dataset.ficha); }));
+  });
 }
 
 /* ---------- FATURAMENTO × META ---------- */
@@ -692,7 +742,7 @@ function renderFaturamento(){
   const cnt = k => todas.filter(l=> l.sit===k && (!FF.grid || l.x.grid===FF.grid)).length;
   const cls = r => r==null ? '' : r < .5 ? 'low' : r < .85 ? 'mid' : '';
   const SIT = { critico:['Crítico','red'], atencao:['Atenção','amber'], ok:['No ritmo','green'] };
-  v.innerHTML = `<div class="head"><div><h2>Faturamento × meta · ${esc(new Date(S.mes+'-15T12:00').toLocaleDateString('pt-BR',{month:'long',year:'numeric'}))}</h2><p>Esperado = meta do veículo × ${ate} de ${n} dias do mês. Ritmo = faturado ÷ esperado.${novos.length?` Os ${novos.length} conjuntos que entraram na frota no meio do mês têm meta só dos dias em que já estavam aqui.`:''}</p></div>
+  v.innerHTML = `<div class="head"><div><span class="eyebrow">Faturamento × meta · ${esc(new Date(S.mes+'-15T12:00').toLocaleDateString('pt-BR',{month:'long',year:'numeric'}))}</span><h2>Quem está no ritmo da meta</h2><p>Esperado = meta do veículo × ${ate} de ${n} dias do mês. Ritmo = faturado ÷ esperado.${novos.length?` Os ${novos.length} conjuntos que entraram na frota no meio do mês têm meta só dos dias em que já estavam aqui.`:''}</p></div>
       <div class="acts"><select id="ff-mes" class="btn" aria-label="Mês">${(S.meses||[S.mes]).map(m=>`<option value="${m}" ${m===S.mes?'selected':''}>${new Date(m+'-15T12:00').toLocaleDateString('pt-BR',{month:'long',year:'numeric'})}</option>`).join('')}</select>
         ${ehAdmin()?'<button class="btn pri" type="button" id="ff-imp" title="O relatório de faturamento por CT-e, do jeito que sai do sistema (Excel ou CSV)">⤒ Importar relatório de faturamento</button>':''}</div></div>
     <div class="kpis">
@@ -706,8 +756,8 @@ function renderFaturamento(){
       ${porGrid.map(r=>{ const rit = r.esp ? r.fat/r.esp : null; return `<tr data-grid="${esc(r.g)}"><td><b>${esc(S.grids[r.g].nome)}</b></td><td class="n">${r.n}</td><td class="n">${fR(r.meta)}</td><td class="n">${fR(r.esp)}</td><td class="n">${fR(r.fat)}</td><td class="n">${fP(r.meta?r.fat/r.meta:null)}</td>
         <td><div style="display:flex;gap:8px;align-items:center"><div class="meter" style="width:140px"><i class="${cls(rit)}" style="width:${Math.min(100,(rit||0)*100)}%"></i></div><b class="mono">${fP(rit)}</b></div></td></tr>`; }).join('')}
     </tbody></table></div>
-    <div class="chips">
-      ${['critico','atencao','ok'].map(k=>`<button class="chip k-${SIT[k][1]}" type="button" data-sit="${k}" aria-pressed="${FF.sit===k}" title="${k==='critico'?'Menos da metade do esperado':k==='atencao'?'Entre 50% e 85% do esperado':'85% ou mais do esperado'}"><b>${cnt(k)}</b><span>${SIT[k][0]}</span><small>${k==='critico'?'abaixo de 50% do ritmo':k==='atencao'?'de 50% a 85%':'85% ou mais'}</small></button>`).join('')}
+    <div class="tl-cards">
+      ${['critico','atencao','ok'].map(k=>`<button class="tl-card k-${k} ${FF.sit===k?'on':''}" type="button" data-sit="${k}" aria-pressed="${FF.sit===k}" title="${k==='critico'?'Menos da metade do esperado':k==='atencao'?'Entre 50% e 85% do esperado':'85% ou mais do esperado'}"><span class="tl-ico">${ICO[k==='critico'?'alerta':k==='atencao'?'relogio':'disp']}</span><b>${cnt(k)}</b><span>${SIT[k][0]}</span><small>${k==='critico'?'abaixo de 50% do ritmo':k==='atencao'?'de 50% a 85%':'85% ou mais'}</small></button>`).join('')}
     </div>
     ${FF.grid||FF.sit?`<div class="filtros-ativos">${FF.grid?`<button type="button" data-x="grid">${esc(S.grids[FF.grid].nome)} ✕</button>`:''}${FF.sit?`<button type="button" data-x="sit">${esc(SIT[FF.sit][0])} ✕</button>`:''}</div>`:''}
     <div class="card tbl-wrap" style="max-height:70vh"><table class="tb"><thead><tr><th>Placa</th><th>Motorista</th><th>Grid</th><th class="n" title="Dias indisponíveis no mês até hoje">Dias parado</th><th>Motivo principal</th><th class="n">Faturado</th><th class="n">Esperado</th><th>Ritmo</th><th class="n">Falta</th><th>Situação</th><th title="Por que a placa não está batendo a meta (o antigo OBS do Dashboard)">Justificativa</th></tr></thead><tbody>
