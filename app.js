@@ -545,7 +545,7 @@ function renderPainel(){
           <span class="pn-tb"><i style="width:${l.gap/maxGap*100}%"></i></span><b class="pn-tv">${fRk(l.gap)}</b></button>`).join('') || '<div class="empty">Nenhuma placa abaixo do esperado.</div>'}</div>
       </section>
     </div>
-    <p class="sub" style="margin:0">Regra igual às outras telas: disponível = rodando ou parado com cota; esperado = meta do veículo × dias decorridos (até ontem) ÷ dias do mês. Os gráficos usam o filtro de grid acima; o de faturamento por grid mostra sempre os quatro.</p>`;
+    <p class="sub" style="margin:0">Regra igual às outras telas: disponível = rodando ou parado com cota; esperado = meta do veículo × dias decorridos (até ontem) ÷ dias do mês; conjunto que entrou no meio do mês conta só a partir do primeiro lançamento. Os gráficos usam o filtro de grid acima; o de faturamento por grid mostra sempre os quatro.</p>`;
   $('#pn-grid', v).addEventListener('change', e=>{ S.pnGrid = e.target.value; renderPainel(); });
   $('#pn-mes', v).addEventListener('change', async e=>{ S.mes = e.target.value; lsSet('frt_mes', S.mes); await carregarMes(); renderPainel(); });
   // do gráfico ao caso: o pedaço clicado vira o filtro da tela de trabalho
@@ -564,11 +564,16 @@ function refDia(){ const h = hojeISO(), n = diasDoMes(S.mes); if(S.mes < h.slice
 function linhasFat(){
   const n = diasDoMes(S.mes), ate = refDia(), hoje = hojeISO();
   return S.veic.map(x=>{
-    const meta = S.metas[S.mes+'|'+x.grid] || 0, esp = meta*ate/n, fat = S.fat[x.placa] || 0;
+    // meta proporcional (pedido do Luiz, 28/10): conjunto que entrou na frota no meio do mês só tem meta dos dias
+    // em que já estava aqui. A entrada é o primeiro dia com lançamento no mês; antes disso ele não existia na frota.
+    const base = S.metas[S.mes+'|'+x.grid] || 0, fat = S.fat[x.placa] || 0;
+    let ini = 0;
+    for(let d=1; d<=n; d++){ if(reg(x.placa, diaDoMes(S.mes,d)) && reg(x.placa, diaDoMes(S.mes,d)).status){ ini = d; break; } }
+    const desde = ini || 1, meta = base*(n-desde+1)/n, esp = base*Math.max(0, ate-desde+1)/n;
     let ind = 0; const mot = {};
     for(let d=1; d<=n; d++){ const s = diaDoMes(S.mes,d); if(s>hoje) break; const st = stDe(x.placa,s); if(st && !st.disponivel){ ind++; mot[st.nome] = (mot[st.nome]||0)+1; } }
     const ritmo = esp ? fat/esp : null;
-    return { x, meta, esp, fat, gap: esp - fat, ritmo, ind, motivo: Object.entries(mot).sort((a,b)=>b[1]-a[1])[0], sit: ritmo==null ? 'ok' : ritmo < .5 ? 'critico' : ritmo < .85 ? 'atencao' : 'ok' };
+    return { x, base, entrou: ini>1 ? ini : 0, meta, esp, fat, gap: esp - fat, ritmo, ind, motivo: Object.entries(mot).sort((a,b)=>b[1]-a[1])[0], sit: ritmo==null ? 'ok' : ritmo < .5 ? 'critico' : ritmo < .85 ? 'atencao' : 'ok' };
   });
 }
 function renderFaturamento(){
@@ -576,16 +581,17 @@ function renderFaturamento(){
   const todas = linhasFat();
   const tot = todas.reduce((a,l)=>({ meta:a.meta+l.meta, esp:a.esp+l.esp, fat:a.fat+l.fat }), { meta:0, esp:0, fat:0 });
   const metaMes = todas.reduce((a,l)=> a + l.meta, 0), fatTotal = tot.fat + S.fatFora;
+  const metaCheia = todas.reduce((a,l)=> a + l.base, 0), novos = todas.filter(l=> l.entrou);
   const porGrid = Object.keys(S.grids).map(g=>{ const ls = todas.filter(l=>l.x.grid===g); const s = ls.reduce((a,l)=>({ meta:a.meta+l.meta, esp:a.esp+l.esp, fat:a.fat+l.fat }), { meta:0, esp:0, fat:0 }); return { g, n:ls.length, ...s }; });
   const lista = todas.filter(l=> (!FF.sit || l.sit===FF.sit) && (!FF.grid || l.x.grid===FF.grid)).sort((a,b)=> b.gap - a.gap);
   const cnt = k => todas.filter(l=> l.sit===k && (!FF.grid || l.x.grid===FF.grid)).length;
   const cls = r => r==null ? '' : r < .5 ? 'low' : r < .85 ? 'mid' : '';
   const SIT = { critico:['Crítico','red'], atencao:['Atenção','amber'], ok:['No ritmo','green'] };
-  v.innerHTML = `<div class="head"><div><h2>Faturamento × meta · ${esc(new Date(S.mes+'-15T12:00').toLocaleDateString('pt-BR',{month:'long',year:'numeric'}))}</h2><p>Esperado = meta do veículo × ${ate} de ${n} dias do mês. Ritmo = faturado ÷ esperado.</p></div>
+  v.innerHTML = `<div class="head"><div><h2>Faturamento × meta · ${esc(new Date(S.mes+'-15T12:00').toLocaleDateString('pt-BR',{month:'long',year:'numeric'}))}</h2><p>Esperado = meta do veículo × ${ate} de ${n} dias do mês. Ritmo = faturado ÷ esperado.${novos.length?` Os ${novos.length} conjuntos que entraram na frota no meio do mês têm meta só dos dias em que já estavam aqui.`:''}</p></div>
       <div class="acts"><select id="ff-mes" class="btn" aria-label="Mês">${(S.meses||[S.mes]).map(m=>`<option value="${m}" ${m===S.mes?'selected':''}>${new Date(m+'-15T12:00').toLocaleDateString('pt-BR',{month:'long',year:'numeric'})}</option>`).join('')}</select>
         ${ehAdmin()?'<button class="btn pri" type="button" id="ff-imp" title="O relatório de faturamento por CT-e, do jeito que sai do sistema (Excel ou CSV)">⤒ Importar relatório de faturamento</button>':''}</div></div>
     <div class="kpis">
-      <div class="card kpi"><small>Meta do mês</small><b>${fRk(metaMes)}</b><div class="sub">${fN(S.veic.length)} veículos em ${Object.keys(S.grids).length} grids</div></div>
+      <div class="card kpi"><small>Meta do mês${novos.length?' (proporcional)':''}</small><b>${fRk(metaMes)}</b><div class="sub">${novos.length?`meta cheia ${fRk(metaCheia)} · ${novos.length} conjuntos entraram no mês`:`${fN(S.veic.length)} veículos em ${Object.keys(S.grids).length} grids`}</div></div>
       <div class="card kpi"><small>Esperado até o dia ${ate}</small><b>${fRk(tot.esp)}</b><div class="sub">${fP(metaMes?tot.esp/metaMes:0)} da meta do mês</div></div>
       <div class="card kpi"><small>Faturado</small><b>${fRk(fatTotal)}</b><div class="sub">${fP(metaMes?fatTotal/metaMes:0)} da meta · ${fN(S.fatLinhas)} CT-e</div></div>
       <div class="card kpi"><small>Ritmo</small><b style="color:${tot.esp&&fatTotal/tot.esp<.85?'var(--red)':'var(--green)'}">${fP(tot.esp?fatTotal/tot.esp:null)}</b><div class="sub">do esperado até agora</div></div>
@@ -600,7 +606,7 @@ function renderFaturamento(){
     </div>
     ${FF.grid||FF.sit?`<div class="filtros-ativos">${FF.grid?`<button type="button" data-x="grid">${esc(S.grids[FF.grid].nome)} ✕</button>`:''}${FF.sit?`<button type="button" data-x="sit">${esc(SIT[FF.sit][0])} ✕</button>`:''}</div>`:''}
     <div class="card tbl-wrap" style="max-height:70vh"><table class="tb"><thead><tr><th>Placa</th><th>Motorista</th><th>Grid</th><th class="n" title="Dias indisponíveis no mês até hoje">Dias parado</th><th>Motivo principal</th><th class="n">Faturado</th><th class="n">Esperado</th><th>Ritmo</th><th class="n">Falta</th><th>Situação</th><th title="Por que a placa não está batendo a meta (o antigo OBS do Dashboard)">Justificativa</th></tr></thead><tbody>
-      ${lista.map(l=>`<tr data-ficha="${esc(l.x.placa)}"><td class="mono"><b>${esc(l.x.placa)}</b></td><td>${esc(l.x.motorista||'–')}</td><td>${esc((S.grids[l.x.grid]||{}).nome||'')}</td><td class="n">${l.ind||''}</td><td class="sub">${l.motivo?esc(l.motivo[1]+'× '+l.motivo[0].toLowerCase()):''}</td>
+      ${lista.map(l=>`<tr data-ficha="${esc(l.x.placa)}"><td class="mono"><b>${esc(l.x.placa)}</b></td><td>${esc(l.x.motorista||'–')}${l.entrou?` <span class="tag blue" title="Primeiro lançamento no dia ${l.entrou}: a meta conta a partir daí">entrou dia ${l.entrou}</span>`:''}</td><td>${esc((S.grids[l.x.grid]||{}).nome||'')}</td><td class="n">${l.ind||''}</td><td class="sub">${l.motivo?esc(l.motivo[1]+'× '+l.motivo[0].toLowerCase()):''}</td>
         <td class="n">${fR(l.fat)}</td><td class="n">${fR(l.esp)}</td><td><div style="display:flex;gap:6px;align-items:center"><div class="meter" style="width:80px"><i class="${cls(l.ritmo)}" style="width:${Math.min(100,(l.ritmo||0)*100)}%"></i></div><span class="mono">${fP(l.ritmo)}</span></div></td>
         <td class="n">${l.gap>0?fR(l.gap):'–'}</td><td><span class="tag ${SIT[l.sit][1]}">${SIT[l.sit][0]}</span></td>
         <td data-just="${esc(l.x.placa)}" style="white-space:normal;min-width:220px;max-width:340px" title="Clique para escrever ou mudar">${S.just[l.x.placa]?`<span class="sub" style="color:var(--ink-2)">${esc(S.just[l.x.placa].texto.length>90?S.just[l.x.placa].texto.slice(0,90)+'…':S.just[l.x.placa].texto)}</span>`:l.sit!=='ok'?'<button class="btn sm" type="button">+ Justificar</button>':''}</td></tr>`).join('') || '<tr><td colspan="11" class="muted">Nenhuma placa com esses filtros.</td></tr>'}
