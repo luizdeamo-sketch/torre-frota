@@ -131,7 +131,7 @@ async function sessao(session){
   await carregarBase();
   // quem é novo entra pela Apresentação; depois, pela última tela
   const visto = lsGet('frt_apresentacao:'+S.email, '');
-  irPara(location.hash.replace('#','') || (visto ? lsGet('frt_view', 'hoje') : 'apresentacao'));
+  irPara(location.hash.replace('#','') || (visto ? lsGet('frt_view', data.papel==='programador' ? 'hoje' : 'painel') : 'apresentacao'));
   // primeira vez: o passo a passo no lugar da faixa de novidades (quem é novo não precisa saber o que mudou)
   if(!lsGet(tourChave(), '')){ novidadesCarregar().then(novMarcarVisto); setTimeout(()=> tourAbrir('primeira'), 600); }
   else novidadesIniciar();
@@ -205,8 +205,8 @@ async function salvarDia(placa, dia, status, obs, ate){
 }
 
 /* ---------- navegação ---------- */
-const VIEWS = ['apresentacao','hoje','quadro','faturamento','sugestoes','equipe'];
-const TITULOS = { apresentacao:'Apresentação', hoje:'Hoje', quadro:'Quadro do mês', faturamento:'Faturamento × meta', sugestoes:'Sugestões', equipe:'Equipe' };
+const VIEWS = ['apresentacao','painel','hoje','quadro','faturamento','sugestoes','equipe'];
+const TITULOS = { apresentacao:'Apresentação', painel:'Painel', hoje:'Hoje', quadro:'Quadro do mês', faturamento:'Faturamento × meta', sugestoes:'Sugestões', equipe:'Equipe' };
 $$('.nav').forEach(b=> b.addEventListener('click', ()=> irPara(b.dataset.view)));
 function irPara(v){
   if(!VIEWS.includes(v) || (v==='equipe' && !ehAdmin())) v = 'hoje';
@@ -218,7 +218,7 @@ function irPara(v){
 }
 function render(){
   $('#top-titulo').textContent = TITULOS[S.view];
-  ({ apresentacao:renderApresentacao, hoje:renderHoje, quadro:renderQuadro, faturamento:renderFaturamento, sugestoes:renderSugestoes, equipe:renderEquipe })[S.view]();
+  ({ apresentacao:renderApresentacao, painel:renderPainel, hoje:renderHoje, quadro:renderQuadro, faturamento:renderFaturamento, sugestoes:renderSugestoes, equipe:renderEquipe })[S.view]();
 }
 
 /* ---------- barra de filtros comum (Hoje e Quadro) ---------- */
@@ -309,7 +309,7 @@ function renderApresentacao(){
       <h2>Saber, em um minuto, quantos conjuntos estão rodando hoje e quanto isso vai faturar no mês.</h2>
       <p>A torre lê a planilha de disponibilidade e o relatório de faturamento, junta os dois numa tela só e cria o lugar onde o programador lança o dia com um clique, do computador ou do celular.</p>
       <p class="efeito">Menos planilha, mais caminhão rodando.</p>
-      <div class="acts" style="margin-top:6px"><button class="btn gold" type="button" data-ir="hoje">Começar pela tela Hoje →</button><button class="btn" type="button" data-ir="quadro">Ver o Quadro do mês</button><button class="btn" type="button" id="sb-tour">Ver o passo a passo</button></div></div>
+      <div class="acts" style="margin-top:6px"><button class="btn gold" type="button" data-ir="painel">Ver o Painel →</button><button class="btn" type="button" data-ir="hoje">Tela Hoje</button><button class="btn" type="button" id="sb-tour">Ver o passo a passo</button></div></div>
 
     <div class="sb-sec"><h3>Como a torre foi montada aqui</h3><div class="sb-cards">
       <div class="card sb-card"><div class="verbo">Lê</div><ul><li>A planilha "OUTUBRO - DISPONIBILIDADE" (11 abas): ${fN(nv)} conjuntos, ${ng} grids, 4 programadores, um status por dia.</li><li>O relatório de faturamento por CT-e que sai do sistema da transportadora (${fN(S.fatLinhas)} CT-e de outubro). O gestor importa o arquivo do jeito que ele vem, sem colar em aba nenhuma.</li><li>As metas por veículo de cada grid, da aba Gestão Frota, e as justificativas do Dashboard.</li></ul></div>
@@ -329,6 +329,7 @@ function renderApresentacao(){
     </div></div>
 
     <div class="sb-sec"><h3>O que a torre entrega</h3><div class="sb-cards">
+      <div class="card sb-card"><div class="verbo" style="font-size:16px">Painel</div><ul><li>O antigo Dashboard em gráficos: disponibilidade dia a dia e como a frota passou cada dia.</li><li>Faturamento × meta por grid e as placas onde o faturamento mais falta.</li><li>Clique num gráfico e veja os conjuntos por trás do número.</li></ul></div>
       <div class="card sb-card"><div class="verbo" style="font-size:16px">Disponibilidade do dia</div><ul><li>Quantos estão rodando, parados, em manutenção ou sem motorista.</li><li>Quem ainda não foi lançado hoje.</li><li>Há quantos dias cada conjunto está no mesmo status.</li></ul></div>
       <div class="card sb-card"><div class="verbo" style="font-size:16px">Quadro do mês</div><ul><li>Todos os conjuntos, todos os dias, em cores.</li><li>O resumo por dia (o antigo Resumo) com clique para ver quem é.</li><li>Filtro por programador, grid e operação.</li></ul></div>
       <div class="card sb-card"><div class="verbo" style="font-size:16px">Faturamento × meta</div><ul><li>Meta, esperado no ritmo, faturado e gap por grid.</li><li>As placas críticas primeiro, com o motivo dos dias parados.</li><li>A justificativa de cada placa fora do ritmo, escrita uma vez e guardada.</li><li>A mesma conta do antigo Dashboard, sem fórmula para quebrar.</li></ul></div>
@@ -464,6 +465,97 @@ function renderQuadro(){
   $$('[data-ficha]', v).forEach(td=> td.addEventListener('click', ()=> abrirFicha(td.dataset.ficha)));
   // rola para o dia de hoje
   const wrap = $('.qd-wrap', v), th = $('thead th.hoje', v); if(wrap && th) wrap.scrollLeft = Math.max(0, th.offsetLeft - 260 - 34*10);
+}
+
+/* ---------- PAINEL (o antigo Dashboard, em gráficos; mesmos números das outras telas) ---------- */
+// cores dos grupos nos gráficos: manutenção, motorista e SSMA precisam se distinguir (nas chips os três são vermelhos)
+const COR_G = { rodando:'#1456b8', parado:'#8fb4e8', manut:'#a3261b', motorista:'#d9822b', ssma:'#6b3fa0', vazio:'#c5cbd4' };
+function renderPainel(){
+  const v = $('#view-painel'), n = diasDoMes(S.mes), hoje = hojeISO(), g = S.pnGrid || '';
+  const veic = S.veic.filter(x=> !g || x.grid===g), N = veic.length;
+  const ultimo = S.mes < hoje.slice(0,7) ? n : S.mes > hoje.slice(0,7) ? 0 : +hoje.slice(8);
+  const dias = Array.from({length:ultimo}, (_,i)=> diaDoMes(S.mes, i+1));
+  // um dia = quantos em cada grupo e quantos disponíveis (rodando + parado com cota), a regra do Quadro
+  const porDia = dias.map(d=>{ const c = { rodando:0, parado:0, manut:0, motorista:0, ssma:0, vazio:0 }; let disp = 0;
+    veic.forEach(x=>{ const s = stDe(x.placa, d); c[s ? GRUPO_DE[s.grupo] : 'vazio']++; if(s && s.disponivel) disp++; });
+    return { d, c, disp, lanc: N - c.vazio, fechado: N && c.vazio <= N/2 }; });
+  // dia com mais da metade sem lançamento ainda está em aberto (é o caso de hoje de manhã): fica fora da linha e da média,
+  // senão a disponibilidade "despenca" só porque os programadores ainda não lançaram
+  const pctDe = r => r.fechado ? r.disp / N : null;
+  const comDado = porDia.filter(r=> r.fechado);
+  const media = comDado.length ? comDado.reduce((a,r)=> a + r.disp/N, 0) / comDado.length : null;
+  const hj = comDado[comDado.length-1], aberto = porDia.length && !porDia[porDia.length-1].fechado ? porDia[porDia.length-1] : null;
+  // faturamento: as mesmas linhas da tela Faturamento × meta
+  const todas = linhasFat(), fl = todas.filter(l=> !g || l.x.grid===g);
+  const tot = fl.reduce((a,l)=>({ meta:a.meta+l.meta, esp:a.esp+l.esp, fat:a.fat+l.fat }), { meta:0, esp:0, fat:0 });
+  const fatTot = tot.fat + (g ? 0 : S.fatFora), ritmo = tot.esp ? fatTot/tot.esp : null;
+  const crit = fl.filter(l=> l.sit==='critico').length;
+  const porGrid = Object.keys(S.grids).map(k=>{ const ls = todas.filter(l=>l.x.grid===k); const s = ls.reduce((a,l)=>({ meta:a.meta+l.meta, esp:a.esp+l.esp, fat:a.fat+l.fat }), { meta:0, esp:0, fat:0 }); return { k, n:ls.length, ...s, rit: s.esp ? s.fat/s.esp : null }; });
+  const maxG = Math.max(1, ...porGrid.map(r=> Math.max(r.meta, r.fat)));
+  const top = fl.filter(l=> l.gap > 0).sort((a,b)=> b.gap - a.gap).slice(0, 10), maxGap = Math.max(1, ...top.map(l=> l.gap));
+  const corRit = r => r==null ? 'var(--ink-3)' : r < .5 ? 'var(--red)' : r < .85 ? 'var(--amber)' : 'var(--green)';
+  const mesNome = new Date(S.mes+'-15T12:00').toLocaleDateString('pt-BR',{month:'long',year:'numeric'});
+  const rot = d => { const k = +d.slice(8); return k===1 || k%5===0 || d===hoje; };
+  // linha da disponibilidade: SVG esticado (o traço não engorda) e os rótulos em HTML, que não distorcem
+  const pts = porDia.map((r,i)=>{ const p = pctDe(r); return p==null ? null : [ (i+.5)/n*100, 100 - p*100 ]; });
+  const caminho = pts.reduce((s,p,i)=> p ? s + (s && pts[i-1] ? ' L' : (s?' M':'M')) + p[0].toFixed(2)+' '+p[1].toFixed(2) : s, '');
+  v.innerHTML = `<div class="head"><div><span class="eyebrow">Painel · ${esc(mesNome)}</span><h2>A frota e o faturamento num olhar</h2><p>Os mesmos números do Quadro e do Faturamento × meta, em gráfico. Clique em qualquer barra para ver quem é.</p></div>
+      <div class="acts"><select id="pn-grid" class="btn" aria-label="Grid"><option value="">Todos os grids</option>${Object.keys(S.grids).map(k=>`<option value="${esc(k)}" ${k===g?'selected':''}>${esc(S.grids[k].nome)}</option>`).join('')}</select>
+        <select id="pn-mes" class="btn" aria-label="Mês">${(S.meses||[S.mes]).map(m=>`<option value="${m}" ${m===S.mes?'selected':''}>${new Date(m+'-15T12:00').toLocaleDateString('pt-BR',{month:'long',year:'numeric'})}</option>`).join('')}</select></div></div>
+    <div class="kpis pn-kpis">
+      <button type="button" class="card kpi pn-k" data-pn="hoje"><small>Disponíveis ${hj && hj.d===hoje ? 'hoje' : hj ? 'em '+esc(fDia(hj.d)) : ''}</small><b>${hj ? fN(hj.disp) : '–'}</b><div class="sub">de ${fN(N)} conjuntos · ${fP(hj ? hj.disp/N : null)}${aberto ? ` · ${aberto.d===hoje?'hoje':esc(fDia(aberto.d))}: ${aberto.lanc} de ${N} lançados` : hj && hj.c.vazio ? ` · ${hj.c.vazio} sem lançamento` : ''}</div></button>
+      <button type="button" class="card kpi pn-k" data-pn="quadro"><small>Disponibilidade média do mês</small><b>${fP(media)}</b><div class="sub">nos ${comDado.length} dias lançados</div></button>
+      <button type="button" class="card kpi pn-k" data-pn="fat"><small>Ritmo do faturamento</small><b style="color:${corRit(ritmo)}">${fP(ritmo)}</b><div class="sub">${fRk(fatTot)} de ${fRk(tot.esp)} esperados até o dia ${refDia()}</div></button>
+      <button type="button" class="card kpi pn-k" data-pn="fat"><small>Falta para a meta do mês</small><b>${fRk(Math.max(0, tot.meta - fatTot))}</b><div class="sub">meta ${fRk(tot.meta)} · ${fP(tot.meta ? fatTot/tot.meta : null)} feito</div></button>
+      <button type="button" class="card kpi pn-k" data-pn="crit"><small>Placas críticas</small><b style="color:var(--red)">${fN(crit)}</b><div class="sub">abaixo de 50% do ritmo</div></button>
+    </div>
+    <div class="pn-grade">
+      <section class="card pn-card pn-largo"><div class="pn-h"><h3>Disponibilidade dia a dia</h3><span class="sub">% dos ${fN(N)} conjuntos rodando ou parados com cota${media!=null?` · tracejado = média do mês (${fP(media)})`:''}${aberto?` · ${aberto.d===hoje?'hoje':esc(fDia(aberto.d))} ainda em lançamento, fora da conta`:''}</span></div>
+        <div class="pn-linha">
+          <div class="pn-eixo" aria-hidden="true"><span>100%</span><span>75%</span><span>50%</span><span>25%</span><span>0%</span></div>
+          <div class="pn-area">
+            <svg viewBox="0 0 100 100" preserveAspectRatio="none" role="img" aria-label="Disponibilidade por dia em ${esc(mesNome)}">
+              ${[25,50,75].map(y=>`<line x1="0" x2="100" y1="${y}" y2="${y}" class="pn-grid-l"/>`).join('')}
+              ${media!=null?`<line x1="0" x2="100" y1="${(100-media*100).toFixed(2)}" y2="${(100-media*100).toFixed(2)}" class="pn-media"/>`:''}
+              ${caminho?`<path d="${caminho} L${pts.filter(Boolean).slice(-1)[0][0].toFixed(2)} 100 L${pts.find(Boolean)[0].toFixed(2)} 100 Z" class="pn-fundo"/><path d="${caminho}" class="pn-traco"/>`:''}
+            </svg>
+            <div class="pn-pts">${porDia.map((r,i)=>{ const p = pctDe(r); return p==null ? '' : `<button type="button" class="pn-pt${p===Math.min(...comDado.map(pctDe))?' pior':''}" style="left:${(i+.5)/n*100}%;top:${100-p*100}%" data-res="disp|${r.d}" title="${esc(fDia(r.d))}: ${fP(p)} disponíveis (${r.disp} de ${N})${r.c.vazio?' · '+r.c.vazio+' sem lançamento':''}"><span>${p===Math.min(...comDado.map(pctDe))?fP(p):''}</span></button>`; }).join('')}</div>
+          </div>
+        </div>
+        <div class="pn-dias" style="grid-template-columns:repeat(${n},1fr)">${Array.from({length:n},(_,i)=>{ const d = diaDoMes(S.mes,i+1); return `<span class="${d===hoje?'hoje':''}">${rot(d)?i+1:''}</span>`; }).join('')}</div>
+      </section>
+
+      <section class="card pn-card pn-largo"><div class="pn-h"><h3>Como a frota passou cada dia</h3><span class="sub">o antigo Resumo, em barras · clique num pedaço para ver os conjuntos no Quadro</span></div>
+        <div class="pn-pilhas" style="grid-template-columns:repeat(${n},1fr)">${Array.from({length:n},(_,i)=>{ const r = porDia[i]; if(!r) return '<div class="pn-pilha fut"></div>';
+          return `<div class="pn-pilha">${['rodando','parado','manut','motorista','ssma','vazio'].map(k=> r.c[k] ? `<button type="button" style="height:${r.c[k]/N*100}%;background:${COR_G[k]}" data-res="${k}|${r.d}" title="${esc(fDia(r.d))} · ${esc((GRUPOS.find(x=>x.k===k)||{}).nome)}: ${r.c[k]}"></button>` : '').join('')}</div>`; }).join('')}</div>
+        <div class="pn-dias" style="grid-template-columns:repeat(${n},1fr)">${Array.from({length:n},(_,i)=>{ const d = diaDoMes(S.mes,i+1); return `<span class="${d===hoje?'hoje':''}">${rot(d)?i+1:''}</span>`; }).join('')}</div>
+        <div class="legenda" style="padding:6px 0 0">${GRUPOS.map(x=>`<span><i style="background:${COR_G[x.k]}"></i>${esc(x.nome)}${hj?` <b class="mono">${hj.c[x.k]}</b>`:''}</span>`).join('')}<span class="sub">números = ${hj && hj.d===hoje ? 'hoje' : hj ? esc(fDia(hj.d)) : ''}</span></div>
+      </section>
+
+      <section class="card pn-card"><div class="pn-h"><h3>Faturamento × meta por grid</h3><span class="sub">barra = faturado · traço = esperado até o dia ${refDia()} · fundo = meta do mês</span></div>
+        <div class="pn-grids">${porGrid.map(r=>`<button type="button" class="pn-gl${g===r.k?' on':''}" data-grid="${esc(r.k)}" title="Abrir ${esc(S.grids[r.k].nome)} no Faturamento × meta">
+          <span class="pn-gn"><b>${esc(S.grids[r.k].nome)}</b><span class="sub">${r.n} veículos</span></span>
+          <span class="pn-trilho" style="width:${r.meta/maxG*100}%"><i style="width:${r.meta?Math.min(100, r.fat/r.meta*100):0}%;background:${corRit(r.rit)}"></i><u style="left:${r.meta?Math.min(100, r.esp/r.meta*100):0}%"></u></span>
+          <span class="pn-gv"><b style="color:${corRit(r.rit)}">${fP(r.rit)}</b><span class="sub">${fRk(r.fat)} de ${fRk(r.meta)}</span></span></button>`).join('')}</div>
+      </section>
+
+      <section class="card pn-card"><div class="pn-h"><h3>Onde o faturamento está faltando</h3><span class="sub">as ${top.length} placas mais longe do esperado${g?' em '+esc(S.grids[g].nome):''} · clique para abrir a placa</span></div>
+        <div class="pn-top">${top.map(l=>`<button type="button" class="pn-tl" data-ficha="${esc(l.x.placa)}">
+          <span class="pn-tn"><b class="mono">${esc(l.x.placa)}</b><span class="sub">${esc(l.motivo ? l.motivo[1]+' dias de '+l.motivo[0].toLowerCase() : (S.grids[l.x.grid]||{}).nome || '')}</span></span>
+          <span class="pn-tb"><i style="width:${l.gap/maxGap*100}%"></i></span><b class="pn-tv">${fRk(l.gap)}</b></button>`).join('') || '<div class="empty">Nenhuma placa abaixo do esperado.</div>'}</div>
+      </section>
+    </div>
+    <p class="sub" style="margin:0">Regra igual às outras telas: disponível = rodando ou parado com cota; esperado = meta do veículo × dias decorridos (até ontem) ÷ dias do mês. Os gráficos usam o filtro de grid acima; o de faturamento por grid mostra sempre os quatro.</p>`;
+  $('#pn-grid', v).addEventListener('change', e=>{ S.pnGrid = e.target.value; renderPainel(); });
+  $('#pn-mes', v).addEventListener('change', async e=>{ S.mes = e.target.value; lsSet('frt_mes', S.mes); await carregarMes(); renderPainel(); });
+  // do gráfico ao caso: o pedaço clicado vira o filtro da tela de trabalho
+  $$('[data-res]', v).forEach(b=> b.addEventListener('click', ()=>{ const [k,d] = b.dataset.res.split('|'); S.f.res = { g:k, dia:d }; S.f.grid = g; S.f.prog = ''; S.f.chip = ''; irPara('quadro'); }));
+  $$('[data-grid]', v).forEach(b=> b.addEventListener('click', ()=>{ S.fatF.grid = b.dataset.grid; S.fatF.sit = ''; irPara('faturamento'); }));
+  $$('[data-ficha]', v).forEach(b=> b.addEventListener('click', ()=> abrirFicha(b.dataset.ficha)));
+  $$('[data-pn]', v).forEach(b=> b.addEventListener('click', ()=>{ const a = b.dataset.pn;
+    if(a==='hoje'){ S.f.chip = 'disp'; S.f.grid = g; S.f.prog = ''; irPara('hoje'); }
+    else if(a==='quadro'){ S.f.res = null; S.f.grid = g; irPara('quadro'); }
+    else { S.fatF.grid = g; S.fatF.sit = a==='crit' ? 'critico' : ''; irPara('faturamento'); } }));
 }
 
 /* ---------- FATURAMENTO × META ---------- */
@@ -720,6 +812,8 @@ function tourPassos(){
   return [
     { t:`Olá${nome ? ', '+esc(nome) : ''}! Bem-vindo à ${esc(NOME)}`, x:`Aqui está a disponibilidade da frota de outubro e o faturamento × meta, com os dados reais da planilha. Em 1 minuto eu mostro onde fica cada coisa.<br><br>${perfil}` },
     { v:'apresentacao', alvo:()=> $('.side'), t:'O menu', x:'Cada tela responde a uma pergunta. <b>Apresentação</b> explica o que é a torre e o que a planilha escondia. No celular, o menu fica no topo: arraste para o lado.' },
+    { v:'painel', alvo:()=> $('#view-painel .pn-kpis'), t:'Painel: o Dashboard em gráficos', x:'Os números do mês num olhar: disponíveis, disponibilidade média, ritmo do faturamento, quanto falta para a meta e as placas críticas. <b>Clique num número</b> para abrir a tela com os detalhes.' },
+    { v:'painel', alvo:()=> $('#view-painel .pn-grade'), t:'Os gráficos levam ao caso', x:'Disponibilidade dia a dia, como a frota passou cada dia, faturamento por grid e as placas onde mais falta. <b>Clique numa barra, num ponto ou numa placa</b> e o sistema mostra quem está por trás do número.' },
     { v:'hoje', alvo:()=> $('#view-hoje .chips'), t:'Hoje: a frota em um minuto', x:'Quantos conjuntos estão rodando, parados, em manutenção, sem motorista ou sem lançamento. <b>Clique num número</b> para a lista mostrar só aqueles. A data no alto troca o dia.' },
     { v:'hoje', alvo:()=> $('#view-hoje .cj'), t:'Um conjunto por linha', x:'Placa, grid, motorista, como estava ontem e o status de hoje. Quem está sem lançamento e quem está parado há mais tempo aparece primeiro.' + (pap==='leitura' ? ' Quem lança o status é o programador.' : ' Clique no status para mudar; <b>Igual a ontem</b> repete o dia anterior.') },
     { v:'quadro', alvo:()=> $('#view-quadro .qd-wrap') || $('#view-quadro .card'), t:'Quadro do mês', x:'A aba Disponibilidade, em cores: um quadrinho por dia. As linhas de cima são o antigo Resumo. <b>Clique num número</b> do resumo para ver quais conjuntos são, ou num quadrinho para ver o dia daquele conjunto.' },

@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
-<meta name="app-build" content="202610280836">
+<meta name="app-build" content="202610281159">
 <title>Torre de Controle - Transpanorama</title>
 <link rel="icon" href="logo.svg" type="image/svg+xml">
 <link rel="preconnect" href="https://fonts.googleapis.com">
@@ -40,6 +40,7 @@ button{cursor:pointer}
 .muted{color:var(--ink-3)}
 [hidden]{display:none!important}
 h1,h2,h3{font-family:var(--fh);font-weight:800;letter-spacing:-.005em;color:var(--title)}
+.eyebrow{display:block;margin-bottom:4px;font-size:12px;font-weight:700;letter-spacing:.18em;text-transform:uppercase;color:var(--gold-ink)}
 
 /* casca */
 .shell{display:grid;grid-template-columns:236px 1fr;min-height:100vh}
@@ -235,6 +236,53 @@ table.tb tbody tr:hover td{background:var(--panel-2)}
 #ac-versao{position:fixed;top:0;left:0;right:0;z-index:300;background:var(--amber);color:#fff;padding:9px 14px;font-weight:600;display:flex;gap:12px;justify-content:center;align-items:center;flex-wrap:wrap}
 #ac-versao button{background:#fff;color:#7a3e06;border:0;border-radius:999px;padding:5px 14px;font-weight:700}
 
+/* painel */
+.pn-k{text-align:left;cursor:pointer;font:inherit;color:inherit} .pn-k:hover{border-color:var(--ink-3)}
+.pn-grade{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:16px}
+.pn-card{padding:16px 18px 14px;display:grid;gap:12px;align-content:start;min-width:0}
+.pn-largo{grid-column:1/-1}
+.pn-h{display:flex;flex-wrap:wrap;gap:4px 12px;align-items:baseline;justify-content:space-between}
+.pn-h h3{margin:0;font-size:17px}
+.pn-linha{display:grid;grid-template-columns:38px minmax(0,1fr);gap:6px;height:220px}
+.pn-eixo{display:flex;flex-direction:column;justify-content:space-between;font-size:10.5px;color:var(--ink-3);text-align:right;margin:-6px 0}
+.pn-area{position:relative;border-left:1px solid var(--line);border-bottom:1px solid var(--line)}
+.pn-area svg{position:absolute;inset:0;width:100%;height:100%;overflow:visible}
+.pn-grid-l{stroke:var(--line);stroke-width:1;vector-effect:non-scaling-stroke}
+.pn-media{stroke:var(--gold);stroke-width:1.5;stroke-dasharray:5 4;vector-effect:non-scaling-stroke}
+.pn-traco{fill:none;stroke:var(--accent);stroke-width:2.5;stroke-linejoin:round;vector-effect:non-scaling-stroke}
+.pn-fundo{fill:var(--accent);opacity:.1}
+.pn-pts{position:absolute;inset:0}
+.pn-pt{position:absolute;width:22px;height:22px;margin:-11px 0 0 -11px;border:0;background:transparent;padding:0;cursor:pointer}
+.pn-pt::before{content:"";position:absolute;left:6px;top:6px;width:10px;height:10px;border-radius:50%;background:var(--panel);border:2.5px solid var(--accent);box-sizing:border-box}
+.pn-pt:hover::before,.pn-pt:focus-visible::before{background:var(--accent)}
+.pn-pt.pior::before{border-color:var(--red)}
+.pn-pt span{position:absolute;left:50%;top:-14px;transform:translateX(-50%);font-family:var(--fh);font-weight:800;font-size:11px;color:var(--red);white-space:nowrap}
+.pn-dias{display:grid;margin-left:44px;font-size:10.5px;color:var(--ink-3);text-align:center}
+.pn-dias .hoje{color:var(--red);font-weight:700}
+.pn-pilhas{display:grid;gap:3px;height:200px;margin-left:44px;align-items:end;border-bottom:1px solid var(--line)}
+.pn-pilha{height:100%;display:flex;flex-direction:column-reverse;border-radius:3px 3px 0 0;overflow:hidden;min-width:0}
+.pn-pilha.fut{background:repeating-linear-gradient(45deg,transparent,transparent 3px,var(--panel-2) 3px,var(--panel-2) 6px)}
+.pn-pilha button{border:0;padding:0;width:100%;cursor:pointer;flex:none}
+.pn-pilha button:hover{filter:brightness(1.15)}
+.pn-grids,.pn-top{display:grid;gap:6px}
+.pn-gl,.pn-tl{display:grid;align-items:center;gap:12px;border:1px solid transparent;background:transparent;border-radius:8px;padding:8px 6px;text-align:left;cursor:pointer;font:inherit;color:inherit;width:100%}
+.pn-gl{grid-template-columns:110px minmax(0,1fr) 170px}
+.pn-gl:hover,.pn-tl:hover,.pn-gl.on{background:var(--panel-2);border-color:var(--line)}
+.pn-gn,.pn-gv,.pn-tn{display:grid;min-width:0} .pn-gv{text-align:right} .pn-gv b{font-family:var(--fh);font-size:18px}
+.pn-trilho{position:relative;height:18px;border-radius:5px;background:var(--gray-soft);display:block;min-width:30px}
+.pn-trilho i{position:absolute;left:0;top:0;bottom:0;border-radius:5px}
+.pn-trilho u{position:absolute;top:-4px;bottom:-4px;width:3px;margin-left:-1px;background:var(--ink);border-radius:2px}
+.pn-tl{grid-template-columns:minmax(120px,1.1fr) minmax(0,1.4fr) 86px;padding:6px}
+.pn-tn .sub{white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.pn-tb{height:12px;border-radius:4px;background:var(--gray-soft);display:block;overflow:hidden} .pn-tb i{display:block;height:100%;background:var(--red);opacity:.85;border-radius:4px}
+.pn-tv{text-align:right;font-family:var(--fh);font-weight:800;color:var(--red)}
+@media (max-width:1100px){ .pn-grade{grid-template-columns:minmax(0,1fr)} }
+@media (max-width:640px){
+  .pn-linha{height:170px;grid-template-columns:30px minmax(0,1fr)} .pn-dias,.pn-pilhas{margin-left:36px} .pn-pilhas{height:160px;gap:1px}
+  .pn-gl{grid-template-columns:minmax(0,1fr) 96px} .pn-gl .pn-trilho{grid-column:1/-1;grid-row:2;width:100%!important}
+  .pn-tl{grid-template-columns:minmax(0,1fr) 80px} .pn-tl .pn-tb{grid-column:1/-1;grid-row:2}
+}
+
 /* passo a passo */
 #tour-luz{position:fixed;z-index:400;border:3px solid var(--gold);border-radius:12px;box-shadow:0 0 0 9999px rgba(6,26,58,.62);pointer-events:none;transition:all .25s ease}
 #tour-luz.cheio{inset:0;border:0;border-radius:0;box-shadow:none;background:rgba(6,26,58,.62)}
@@ -258,7 +306,7 @@ table.tb tbody tr:hover td{background:var(--panel-2)}
   .brand{padding:2px 8px 2px 2px;flex:none} .side .brand small,.side .brand b,.side .marca+i{display:none} .side .marca{font-size:14px}
   .nav{flex:none;white-space:nowrap} .nav.on{box-shadow:inset 0 -3px 0 var(--gold)}
   .side .grow,.side .quem{display:none}
-  .top{position:static;padding:10px 16px} .top .icon-btn>span{display:none}
+  .top{position:static;padding:10px 16px;flex-wrap:nowrap} .top h1{min-width:0;font-size:16px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap} .top .icon-btn>span{display:none}
   .content{padding:14px 16px 96px}
   .eq-form{grid-template-columns:1fr 1fr}
   #nov-faixa{left:16px;right:84px;bottom:16px}
@@ -304,6 +352,7 @@ table.tb tbody tr:hover td{background:var(--panel-2)}
   <aside class="side">
     <div class="brand"><div><span class="marca">TRANSPANORAMA</span><i></i><b>Torre de Controle</b><small>Desde 1986 · Maringá/PR</small></div></div>
     <button type="button" class="nav" data-view="apresentacao"><svg viewBox="0 0 24 24"><path d="M4 5h16v11H4zM8 20h8M12 16v4"/></svg><span>Apresentação</span></button>
+    <button type="button" class="nav" data-view="painel"><svg viewBox="0 0 24 24"><rect x="3" y="3" width="8" height="8" rx="1.5"/><rect x="13" y="3" width="8" height="5" rx="1.5"/><rect x="13" y="10" width="8" height="11" rx="1.5"/><rect x="3" y="13" width="8" height="8" rx="1.5"/></svg><span>Painel</span></button>
     <button type="button" class="nav" data-view="hoje"><svg viewBox="0 0 24 24"><path d="M3 7h11v9H3zM14 10h4l3 3v3h-7"/><circle cx="7" cy="17.5" r="1.8"/><circle cx="17" cy="17.5" r="1.8"/></svg><span>Hoje</span></button>
     <button type="button" class="nav" data-view="quadro"><svg viewBox="0 0 24 24"><rect x="3" y="4" width="18" height="16" rx="2"/><path d="M3 9h18M8 4v16M13 4v16"/></svg><span>Quadro do mês</span></button>
     <button type="button" class="nav" data-view="faturamento"><svg viewBox="0 0 24 24"><path d="M4 19V9M10 19V5M16 19v-7M22 19H2"/></svg><span>Faturamento × meta</span></button>
@@ -322,6 +371,7 @@ table.tb tbody tr:hover td{background:var(--panel-2)}
     </header>
     <main class="content">
       <section class="view" id="view-apresentacao"></section>
+      <section class="view" id="view-painel"></section>
       <section class="view" id="view-hoje"></section>
       <section class="view" id="view-quadro"></section>
       <section class="view" id="view-faturamento"></section>
@@ -334,7 +384,7 @@ table.tb tbody tr:hover td{background:var(--panel-2)}
 <div id="modal-root"></div>
 
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.45.4/dist/umd/supabase.min.js"></script>
-<script src="app.js?v=202610280836"></script>
-<script src="acompanhante.js?v=202610280836"></script>
+<script src="app.js?v=202610281159"></script>
+<script src="acompanhante.js?v=202610281159"></script>
 </body>
 </html>
