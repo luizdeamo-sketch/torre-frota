@@ -244,6 +244,7 @@ async function enviar(){
 /* estilo (usa os tokens do tema: funciona no claro e no escuro) */
 const css = document.createElement('style'); css.textContent = `
   #ac-root{position:fixed;right:22px;bottom:22px;z-index:60}
+  body:has(#app[hidden]) #ac-root{display:none}
   #ac-btn{width:54px;height:54px;border-radius:50%;border:0;background:var(--gold);color:#1b1404;font-size:22px;box-shadow:var(--shadow-lg)}
   #ac-bubble,#ac-box{position:absolute;right:0;bottom:66px;width:340px;background:var(--panel);color:var(--ink);border:1px solid var(--line);border-radius:14px;padding:14px;box-shadow:var(--shadow-lg);font-size:13px}
   #ac-box{max-height:78vh;overflow:auto} #ac-bubble p{margin:0 0 10px}
