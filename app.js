@@ -1,10 +1,10 @@
-/* Torre de Controle - Transportadora: disponibilidade diária da frota de combustível.
+/* Torre de Controle - Transpanorama: disponibilidade diária da frota de combustível.
    Telas: Apresentação, Hoje (o programador lança), Quadro do mês, Faturamento × meta, Sugestões, Equipe (gestor).
    Banco: Supabase da Capacity Case, tabelas frt_*. Regra de disponível/indisponível em frt_status (uma regra só). */
 (function(){
 'use strict';
 const CONFIG = {
-  empresa: 'Transportadora',                    // nome provisório: trocar quando o cliente confirmar
+  empresa: 'Transpanorama',
   url: 'https://iuotvottnailofxbaynx.supabase.co',
   anon: 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Iml1b3R2b3R0bmFpbG9meGJheW54Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3OTI1Mjg2NjMsImV4cCI6MjEwODEwNDY2M30._0FhywQ4Vq3km5Rl4tHEPtCLBVom4VAGaXG3X3nrUyQ'
 };
