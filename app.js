@@ -290,14 +290,36 @@ function abrirFicha(placa){
       <div class="kv"><div><small>Dias disponíveis</small><b>${disp}</b></div><div><small>Dias indisponíveis</small><b>${ind}</b></div><div><small>Sem lançamento</small><b>${vaz}</b></div>
         <div><small>Faturado no mês</small><b class="mono">${fR(fat)}</b></div><div><small>Esperado até dia ${ate}</small><b class="mono">${fR(esp)}</b></div><div><small>Ritmo</small><b>${fP(esp?fat/esp:null)}</b></div></div>
       ${mot?`<div class="sub">Por que parou: ${esc(mot)}.</div>`:''}
+      <div class="fld"><span>O mês na linha do tempo (clique numa barra para ver os dias)</span><div class="tl-trilha ficha" data-tr="${esc(placa)}">${barrasHTML(placa, Array.from({length:n},(_,i)=>diaDoMes(S.mes,i+1)), hojeISO(), n)}</div>
+        <div class="tl-regua" style="--n:${n}">${Array.from({length:n},(_,i)=>`<span>${(i+1)===1||(i+1)%5===0?i+1:''}</span>`).join('')}</div></div>
+      <div class="fc-sec"><h4><span class="tl-ico mini k-rodando">${ICO.frota}</span> Cadastro do conjunto</h4><div class="kv">
+        <div><small>Cavalo</small><b class="mono">${esc(v.placa)}</b></div><div><small>Carretas</small><b class="mono">${esc([v.carreta1,v.carreta2].filter(Boolean).join(' + ')||'–')}</b></div>
+        <div><small>Motorista</small><b>${esc(v.motorista||'sem motorista na planilha')}</b></div><div><small>Tipo · capacidade</small><b>${esc([v.tipo, v.m3?fN(v.m3)+' m³':''].filter(Boolean).join(' · ')||'–')}</b></div>
+        <div><small>Vínculo</small><b>${esc(v.vinculo||'–')}</b></div><div><small>Programador</small><b>${esc(v.programador||'–')}</b></div>
+        <div><small>Grid</small><b>${esc((S.grids[v.grid]||{}).nome||v.grid||'–')}</b></div><div><small>Meta base do mês</small><b class="mono">${fR(meta)}</b></div></div></div>
+      ${opHTML(v)}
       ${S.just[placa]?`<div class="sg-resp"><b>Justificativa do mês:</b> ${esc(S.just[placa].texto)}</div>`:''}
-      <div class="fld"><span>O mês, dia a dia (clique num dia para mudar)</span><div class="mini-mes">${Array.from({length:n},(_,i)=>{ const s = diaDoMes(S.mes,i+1), st = stDe(placa,s), r = reg(placa,s);
-        return `<i data-d="${s}" title="${esc(String(i+1).padStart(2,'0')+' · '+(st?st.nome:'sem lançamento')+(r&&r.obs?' · '+r.obs:''))}" style="cursor:pointer;${st?'background:'+esc(st.cor):s<=hojeISO()?'outline:1px dashed var(--amber);outline-offset:-1px':''}"></i>`; }).join('')}</div></div>
       ${v.obs?`<div class="sub">Observação fixa da planilha: ${esc(v.obs)}</div>`:''}
     </div>
     <div class="modal-f"><button class="btn" type="button" data-close>Fechar</button></div>`, bg=>{
-    $$('[data-d]', bg).forEach(i=> i.addEventListener('click', ()=>{ fecharModal(); modalStatus(placa, i.dataset.d); }));
+    $$('[data-trecho]', bg).forEach(b=> b.addEventListener('click', ()=>{ const [p,i,f] = b.dataset.trecho.split('|'); fecharModal(); modalTrecho(p, +i, +f); }));
+    const vo = $('#fc-op', bg); if(vo) vo.addEventListener('click', ()=>{ fecharModal(); S.f.op = v.operacao; S.f.res = null; irPara('quadro'); });
   });
+}
+// a operação do conjunto (cliente/contrato): quantos conjuntos tem, como está hoje e no mês
+function opHTML(v){
+  if(!v.operacao) return '';
+  const n = diasDoMes(S.mes), hoje = hojeISO(), ds = Array.from({length:n},(_,i)=>diaDoMes(S.mes,i+1)).filter(d=> d<=hoje);
+  const d0 = S.qdDia && S.qdDia.slice(0,7)===S.mes ? S.qdDia : ds[ds.length-1];   // o dia do resumo do Quadro (último dia já lançado)
+  const cs = S.veic.filter(x=> x.operacao===v.operacao);
+  let a = 0, b = 0; cs.forEach(x=> ds.forEach(d=>{ const s = stDe(x.placa,d); if(s){ b++; if(s.disponivel) a++; } }));
+  const dispHoje = d0 ? cs.filter(x=> (stDe(x.placa,d0)||{}).disponivel).length : 0, fat = cs.reduce((t,x)=> t + (S.fat[x.placa]||0), 0);
+  const grids = [...new Set(cs.map(x=> (S.grids[x.grid]||{}).nome || x.grid))].join(', '), progs = [...new Set(cs.map(x=> x.programador).filter(Boolean))].join(', ');
+  return `<div class="fc-sec"><h4><span class="tl-ico mini k-parado">${ICO.disp}</span> Operação ${esc(v.operacao)}</h4><div class="kv">
+    <div><small>Conjuntos na operação</small><b>${cs.length}</b></div><div><small>Disponíveis ${d0===hoje?'hoje':'em '+esc(dm(d0||hoje))}</small><b>${dispHoje} de ${cs.length}</b></div>
+    <div><small>Disponibilidade no mês</small><b>${fP(b?a/b:null)}</b></div><div><small>Faturado no mês</small><b class="mono">${fRk(fat)}</b></div>
+    <div><small>Grids</small><b>${esc(grids||'–')}</b></div><div><small>Programadores</small><b>${esc(progs||'–')}</b></div></div>
+    <button class="btn sm" type="button" id="fc-op" style="margin-top:8px">Ver os ${cs.length} conjuntos da operação na linha do tempo →</button></div>`;
 }
 
 /* ---------- APRESENTAÇÃO ---------- */
@@ -331,7 +353,7 @@ function renderApresentacao(){
     <div class="sb-sec"><h3>O que a torre entrega</h3><div class="sb-cards">
       <div class="card sb-card"><div class="verbo" style="font-size:16px">Painel</div><ul><li>O antigo Dashboard em gráficos: disponibilidade dia a dia e como a frota passou cada dia.</li><li>Faturamento × meta por grid e as placas onde o faturamento mais falta.</li><li>Clique num gráfico e veja os conjuntos por trás do número.</li></ul></div>
       <div class="card sb-card"><div class="verbo" style="font-size:16px">Disponibilidade do dia</div><ul><li>Quantos estão rodando, parados, em manutenção ou sem motorista.</li><li>Quem ainda não foi lançado hoje.</li><li>Há quantos dias cada conjunto está no mesmo status.</li></ul></div>
-      <div class="card sb-card"><div class="verbo" style="font-size:16px">Quadro do mês</div><ul><li>Todos os conjuntos, todos os dias, em cores.</li><li>O resumo por dia (o antigo Resumo) com clique para ver quem é.</li><li>Filtro por programador, grid e operação.</li></ul></div>
+      <div class="card sb-card"><div class="verbo" style="font-size:16px">Quadro do mês</div><ul><li>A linha do tempo de cada conjunto: os dias seguidos no mesmo status viram uma barra só ("Manutenção corretiva · 12d").</li><li>O resumo por dia (o antigo Resumo) com clique para ver quem é.</li><li>Filtro por programador, grid e operação.</li></ul></div>
       <div class="card sb-card"><div class="verbo" style="font-size:16px">Faturamento × meta</div><ul><li>Meta, esperado no ritmo, faturado e gap por grid.</li><li>As placas críticas primeiro, com o motivo dos dias parados.</li><li>A justificativa de cada placa fora do ritmo, escrita uma vez e guardada.</li><li>A mesma conta do antigo Dashboard, sem fórmula para quebrar.</li></ul></div>
     </div></div>
 
@@ -430,41 +452,124 @@ function linhaHoje(x, dia){
   </div>`;
 }
 
-/* ---------- QUADRO DO MÊS ---------- */
+/* ---------- QUADRO DO MÊS: linha do tempo por conjunto (padrão Smart Escala) ---------- */
+// Pedido do Luiz (28/10): no lugar dos quadradinhos, uma linha por conjunto com barras no mesmo eixo de dias.
+// Dias seguidos no mesmo grupo (rodando, parado, manutenção, motorista, SSMA, sem lançamento) viram uma barra só,
+// com o nome e quantos dias durou. Em cima, o resumo do dia (o antigo Resumo da planilha) com ícones.
+const ICO = {
+  rodando:'<svg viewBox="0 0 24 24"><path d="M2 7h11v9H2zM13 10h4l3 3v3h-7"/><circle cx="6" cy="17.5" r="1.8"/><circle cx="16.5" cy="17.5" r="1.8"/></svg>',
+  parado:'<svg viewBox="0 0 24 24"><rect x="4" y="3" width="16" height="18" rx="3"/><path d="M10 17V7h3a3 3 0 0 1 0 6h-3"/></svg>',
+  manut:'<svg viewBox="0 0 24 24"><path d="M14.7 6.3a4 4 0 0 0-5.4 5.2L3 17.8 6.2 21l6.3-6.3a4 4 0 0 0 5.2-5.4l-2.6 2.6-2.4-.6-.6-2.4z"/></svg>',
+  motorista:'<svg viewBox="0 0 24 24"><circle cx="12" cy="7.5" r="3.5"/><path d="M4.5 21a7.5 7.5 0 0 1 15 0"/></svg>',
+  ssma:'<svg viewBox="0 0 24 24"><path d="M12 3l7 3v5c0 4.5-3 8.3-7 10-4-1.7-7-5.5-7-10V6z"/><path d="M9 12l2 2 4-4"/></svg>',
+  vazio:'<svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="M9.6 9.3a2.5 2.5 0 0 1 4.8.9c0 1.7-2.4 2.2-2.4 3.6M12 17h.01"/></svg>',
+  disp:'<svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="M8 12.5l2.6 2.6L16 9.5"/></svg>',
+  frota:'<svg viewBox="0 0 24 24"><path d="M1 6h12v10H1zM13 9h5l4 4v3h-9"/><circle cx="5" cy="17.5" r="2"/><circle cx="17" cy="17.5" r="2"/></svg>' };
+const ORDEM_G = ['rodando','parado','manut','motorista','ssma','vazio'];
+const nomeG = g => g==='vazio' ? 'Sem lançamento' : (GRUPOS.find(x=>x.k===g)||{}).nome || g;
+// trechos de um conjunto no mês: [{g, ini, fim, dias:[iso]}] com índices 0..n-1; dia futuro fica fora
+function trechos(placa, dias, hoje){
+  const out = []; let cur = null;
+  dias.forEach((d,i)=>{
+    if(d > hoje){ cur = null; return; }
+    const g = grupoDe(placa, d);
+    if(cur && cur.g===g){ cur.fim = i; cur.dias.push(d); } else { cur = { g, ini:i, fim:i, dias:[d] }; out.push(cur); }
+  });
+  return out;
+}
+// nome que vai na barra: rodando é "Rodando"; nos outros, o status que mais apareceu no trecho
+function nomeTrecho(placa, t){
+  if(t.g==='rodando' || t.g==='vazio') return nomeG(t.g);
+  const c = {}; t.dias.forEach(d=>{ const s = stDe(placa,d); if(s) c[s.nome] = (c[s.nome]||0)+1; });
+  return Object.entries(c).sort((a,b)=>b[1]-a[1])[0]?.[0] || nomeG(t.g);
+}
+const dm = s => s.slice(8)+'/'+s.slice(5,7);
+function barrasHTML(placa, dias, hoje, n){
+  return trechos(placa, dias, hoje).map(t=>{
+    const len = t.fim - t.ini + 1, nome = nomeTrecho(placa, t);
+    const ult = reg(placa, t.dias[t.dias.length-1]), obs = ult && ult.obs ? ' · '+ult.obs : '';
+    const tip = `${nome} · ${len} ${len>1?'dias':'dia'} (${dm(t.dias[0])}${len>1?' a '+dm(t.dias[len-1]):''})${obs}`;
+    return `<button type="button" class="tl-bar g-${t.g}" style="left:${t.ini/n*100}%;width:${len/n*100}%" data-trecho="${esc(placa)}|${t.ini}|${t.fim}" title="${esc(tip)}">${len>=2?`<i>${ICO[t.g]}</i>`:''}<span>${esc(len>=3 ? nome+' · '+len+'d' : len===2 ? len+'d' : '')}</span></button>`;
+  }).join('');
+}
 function renderQuadro(){
   const v = $('#view-quadro'), F = S.f, n = diasDoMes(S.mes), hoje = hojeISO();
   const dias = Array.from({length:n}, (_,i)=> diaDoMes(S.mes, i+1));
   const semRes = (()=>{ const r = F.res, c = F.chip; F.res = null; F.chip = ''; const l = filtrados(hoje); F.res = r; F.chip = c; return l; })();
-  const lista = (()=>{ const c = F.chip; F.chip = ''; const l = filtrados(hoje); F.chip = c; return l; })();
-  // resumo do conjunto filtrado (sem o clique do resumo): mesma régua das linhas
-  const linhasRes = [{ k:'disp', nome:'Disponíveis', pct:true }].concat(GRUPOS.map(g=>({ k:g.k, nome:g.nome })));
+  // dia do resumo: o escolhido no cabeçalho; senão o último dia já lançado (de manhã, hoje ainda está em branco
+  // e mostraria "0% disponível"; mesma regra do Painel: dia com mais da metade sem lançamento está em aberto)
+  const passados = dias.filter(d=> d<=hoje);
+  const fechado = d => semRes.filter(x=> grupoDe(x.placa,d)==='vazio').length <= semRes.length/2;
+  const ultimoDia = passados.slice().reverse().find(fechado) || passados[passados.length-1] || dias[0];
+  if(!S.qdDia || S.qdDia.slice(0,7)!==S.mes || S.qdDia>hoje) S.qdDia = ultimoDia;
+  const lista0 = (()=>{ const c = F.chip; F.chip = ''; const l = filtrados(hoje); F.chip = c; return l; })();
   const conta = (k, d) => k==='disp' ? semRes.filter(x=> (stDe(x.placa,d)||{}).disponivel).length : semRes.filter(x=> grupoDe(x.placa,d)===k).length;
   const pctMes = x => { let a = 0, b = 0; dias.forEach(d=>{ if(d>hoje) return; const s = stDe(x.placa,d); if(s){ b++; if(s.disponivel) a++; } }); return b ? a/b : null; };
-  v.innerHTML = `<div class="head"><div><h2>Quadro de ${esc(new Date(S.mes+'-15T12:00').toLocaleDateString('pt-BR',{month:'long',year:'numeric'}))}</h2><p>Cada linha é um conjunto, cada coluna um dia. Clique num quadrinho para mudar o status, num número do resumo para ver quem é.</p></div></div>
+  const ord = lsGet('frt_qd_ord', 'parado');
+  const pm = new Map(lista0.map(x=> [x.placa, pctMes(x)]));
+  const lista = lista0.slice().sort((a,b)=> ord==='placa' ? a.placa.localeCompare(b.placa)
+    : ord==='grid' ? String(a.grid).localeCompare(String(b.grid)) || a.placa.localeCompare(b.placa)
+    : ord==='prog' ? String(a.programador).localeCompare(String(b.programador)) || a.placa.localeCompare(b.placa)
+    : ((pm.get(a.placa)??2) - (pm.get(b.placa)??2)) || a.placa.localeCompare(b.placa));
+  const d0 = S.qdDia, N0 = semRes.length, disp0 = conta('disp', d0);
+  const corP = p => p==null ? 'var(--ink-3)' : p<.6 ? 'var(--red)' : p<.8 ? 'var(--amber)' : 'var(--green)';
+  const mesNome = new Date(S.mes+'-15T12:00').toLocaleDateString('pt-BR',{month:'long',year:'numeric'});
+  const cab = dias.map(d=>`<button type="button" class="tl-d ${ehFolgaCal(d)?'fds':''} ${d===hoje?'hoje':''} ${d===d0?'sel':''}" data-qd="${d}" ${d>hoje?'disabled':''} title="${esc(fDia(d))}: ver o resumo deste dia"><b>${+d.slice(8)}</b><small>${SEM[dow(d)].slice(0,1)}</small></button>`).join('');
+  const fundo = dias.map(d=>`<i class="${ehFolgaCal(d)?'fds':''} ${d===hoje?'hoje':''} ${d===d0?'sel':''}"></i>`).join('');
+  const linhasRes = [{ k:'disp' }].concat(ORDEM_G.map(k=>({ k })));
+  v.innerHTML = `<div class="head"><div><span class="eyebrow">Linha do tempo · ${esc(mesNome)}</span><h2>Como cada conjunto passou o mês</h2><p>Cada linha é um conjunto e cada barra, um trecho de dias no mesmo status. Clique na placa para abrir o cadastro, numa barra para ver os dias daquele trecho.</p></div>
+      <div class="acts"><label class="sub" for="q-ord">Ordem</label><select id="q-ord" class="btn" aria-label="Ordem das linhas"><option value="parado" ${ord==='parado'?'selected':''}>Mais parados primeiro</option><option value="placa" ${ord==='placa'?'selected':''}>Placa</option><option value="grid" ${ord==='grid'?'selected':''}>Grid</option><option value="prog" ${ord==='prog'?'selected':''}>Programador</option></select></div></div>
     ${barraFiltros(false)}
-    ${F.res?`<div class="filtros-ativos"><button type="button" id="q-xres">${esc(linhasRes.find(l=>l.k===F.res.g).nome)} em ${esc(fDia(F.res.dia))} ✕</button></div>`:''}
-    <div class="card" style="overflow:hidden">
-      <div class="qd-wrap"><table class="qd"><thead><tr><th class="fix">${fN(lista.length)} conjuntos <span class="sub" title="Quanto dos dias lançados o conjunto ficou disponível">· % disp.</span></th>${dias.map(d=>`<th class="${ehFolgaCal(d)?'fds':''} ${d===hoje?'hoje':''}" title="${esc(fDia(d))}">${+d.slice(8)}<div style="font-weight:400">${SEM[dow(d)].slice(0,1)}</div></th>`).join('')}</tr></thead>
-      <tbody>
-        ${linhasRes.map(l=>`<tr class="res"><td class="fix" title="${esc(l.k==='disp'?'Rodando + disponível parado':GRUPOS.find(g=>g.k===l.k).desc)}">${esc(l.nome)}</td>${dias.map(d=>{ if(d>hoje && l.k!=='disp') return `<td class="${ehFolgaCal(d)?'fds':''}"></td>`; const c = conta(l.k,d);
-          const txt = l.pct ? (d>hoje && !c ? '' : fP(semRes.length?c/semRes.length:0)) : (c||'');
-          return `<td class="${ehFolgaCal(d)?'fds':''} ${d===hoje?'hoje':''} ${F.res&&F.res.g===l.k&&F.res.dia===d?'sel':''}" data-res="${l.k}|${d}" title="${esc(c+' · '+l.nome+' · '+fDia(d))}">${txt}</td>`; }).join('')}</tr>`).join('')}
-        ${lista.slice(0, 400).map(x=>{ const p = pctMes(x); return `<tr class="cjr"><td class="fix" data-ficha="${esc(x.placa)}" title="Abrir a ficha"><b class="mono">${esc(x.placa)}</b> <span class="pct" style="color:${p==null?'var(--ink-3)':p<.6?'var(--red)':p<.8?'var(--amber)':'var(--green)'}">${fP(p)}</span><div class="sub" style="white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${esc(x.motorista||'sem motorista')} · ${esc((S.grids[x.grid]||{}).nome||'')}</div></td>
-          ${dias.map(d=>{ const r = reg(x.placa,d), st = r && r.status ? S.status[r.status] : null;
-            const cl = (ehFolgaCal(d)?'fds ':'') + (d===hoje?'hoje ':'') + (st ? '' : d<=hoje ? 'vz' : 'fut');
-            const tip = String(+d.slice(8)).padStart(2,'0')+' · '+(st?st.nome:d<=hoje?'sem lançamento':'')+(r&&r.obs?' · '+r.obs:'');
-            return `<td class="c ${cl}" data-c="${esc(x.placa)}|${d}" title="${esc(tip)}"><span style="${st?'background:'+esc(st.cor):''}">${st?esc(SIGLA[st.codigo]||''):''}</span></td>`; }).join('')}</tr>`; }).join('')}
-      </tbody></table></div>
+    <section class="card tl-resumo" aria-label="Resumo do dia">
+      <div class="tl-rh"><span class="tl-ico frota">${ICO.frota}</span><div><b>${esc(d0===hoje?'Hoje, '+fDia(d0):fDia(d0))}</b><span class="sub">${fN(N0)} conjuntos${F.prog||F.grid||F.op||F.busca?' no filtro':' na frota'} · clique num dia do eixo para ver outro dia</span></div>
+        <div class="tl-medidor" title="${disp0} de ${N0} disponíveis"><i style="width:${N0?disp0/N0*100:0}%"></i></div><b class="tl-pct" style="color:${corP(N0?disp0/N0:null)}">${fP(N0?disp0/N0:null)} disponível</b></div>
+      <div class="tl-cards">
+        <button type="button" class="tl-card k-disp ${F.res&&F.res.g==='disp'&&F.res.dia===d0?'on':''}" data-res="disp|${d0}"><span class="tl-ico">${ICO.disp}</span><b>${disp0}</b><span>Disponíveis</span><small>podem carregar</small></button>
+        ${ORDEM_G.map(k=>{ const c = conta(k, d0); return `<button type="button" class="tl-card k-${k} ${c?'':'zero'} ${F.res&&F.res.g===k&&F.res.dia===d0?'on':''}" data-res="${k}|${d0}" title="${esc(k==='vazio'?'Ninguém informou o status deste conjunto neste dia':(GRUPOS.find(x=>x.k===k)||{}).desc||'')}"><span class="tl-ico">${ICO[k]}</span><b>${c}</b><span>${esc(nomeG(k))}</span><small>${esc(k==='vazio'?'ninguém informou':(GRUPOS.find(x=>x.k===k)||{}).curto||'')}</small></button>`; }).join('')}
+      </div>
+    </section>
+    ${F.res?`<div class="filtros-ativos"><button type="button" id="q-xres">${esc(F.res.g==='disp'?'Disponíveis':nomeG(F.res.g))} em ${esc(fDia(F.res.dia))} ✕</button></div>`:''}
+    <div class="card tl" style="--n:${n}">
+      <div class="tl-in">
+        <div class="tl-cab"><div class="tl-esq tl-esq-cab"><b>${fN(lista.length)} conjuntos</b><span class="sub">% = dias disponíveis no mês</span></div><div class="tl-dias">${cab}</div></div>
+        <div class="tl-res">${linhasRes.map(l=>`<div class="tl-rl"><div class="tl-esq"><span class="tl-ico mini k-${l.k}">${ICO[l.k]}</span>${esc(l.k==='disp'?'Disponíveis':nomeG(l.k))}</div><div class="tl-rc">${dias.map(d=>{ if(d>hoje) return '<span class="fut"></span>'; const c = conta(l.k,d), a = N0 ? Math.min(1, c/N0*(l.k==='disp'?1:4)) : 0;
+          return `<button type="button" class="${F.res&&F.res.g===l.k&&F.res.dia===d?'sel':''}" data-res="${l.k}|${d}" style="--a:${a.toFixed(2)}" title="${esc(c+' · '+(l.k==='disp'?'disponíveis':nomeG(l.k).toLowerCase())+' · '+fDia(d))}">${l.k==='disp' ? (N0?Math.round(c/N0*100):0) : (c||'')}</button>`; }).join('')}</div></div>`).join('')}</div>
+        <div class="tl-corpo"><div class="tl-fundo" aria-hidden="true">${fundo}</div>
+          ${lista.slice(0, 400).map(x=>{ const p = pm.get(x.placa), g = grupoDe(x.placa, d0);
+            return `<div class="tl-row"><button type="button" class="tl-esq tl-quem" data-ficha="${esc(x.placa)}" title="Abrir o cadastro do conjunto">
+              <span class="tl-ico mini k-${g}" title="${esc(nomeG(g))} em ${esc(dm(d0))}">${ICO[g]}</span>
+              <span class="tl-q"><span><b class="mono">${esc(x.placa)}</b> <span class="tag">${esc((S.grids[x.grid]||{}).nome||x.grid||'')}</span></span><small>${esc(x.motorista||'sem motorista')}</small></span>
+              <b class="tl-p" style="color:${corP(p)}">${fP(p)}</b></button>
+              <div class="tl-trilha" data-tr="${esc(x.placa)}">${barrasHTML(x.placa, dias, hoje, n)}</div></div>`; }).join('') || '<div class="empty">Nenhum conjunto com esses filtros.</div>'}
+        </div>
+      </div>
       ${lista.length>400?`<div class="sub" style="padding:8px 12px">Mostrando 400 de ${lista.length}. Use os filtros.</div>`:''}
-      <div class="legenda">${Object.values(S.status).map(s=>`<span><i style="background:${esc(s.cor)}"></i><b class="mono">${esc(SIGLA[s.codigo]||'')}</b> ${esc(s.nome)}</span>`).join('')}<span><i style="border:1px dashed var(--amber)"></i>sem lançamento</span></div>
+      <div class="legenda">${ORDEM_G.map(k=>`<span><i class="tl-leg g-${k}"></i>${esc(nomeG(k))}</span>`).join('')}<span><i style="width:2px;height:12px;background:var(--red)"></i>hoje</span><span><i style="background:var(--panel-2);border:1px solid var(--line)"></i>fim de semana ou feriado</span></div>
     </div>`;
   ligarFiltros(v, renderQuadro);
+  $('#q-ord', v).addEventListener('change', e=>{ lsSet('frt_qd_ord', e.target.value); renderQuadro(); });
   const xr = $('#q-xres', v); if(xr) xr.addEventListener('click', ()=>{ F.res = null; renderQuadro(); });
-  $$('[data-res]', v).forEach(td=> td.addEventListener('click', ()=>{ const [g,d] = td.dataset.res.split('|'); F.res = (F.res && F.res.g===g && F.res.dia===d) ? null : { g, dia:d }; renderQuadro(); }));
-  $$('[data-c]', v).forEach(td=> td.addEventListener('click', ()=>{ const [p,d] = td.dataset.c.split('|'); modalStatus(p, d, renderQuadro); }));
-  $$('[data-ficha]', v).forEach(td=> td.addEventListener('click', ()=> abrirFicha(td.dataset.ficha)));
-  // rola para o dia de hoje
-  const wrap = $('.qd-wrap', v), th = $('thead th.hoje', v); if(wrap && th) wrap.scrollLeft = Math.max(0, th.offsetLeft - 260 - 34*10);
+  $$('[data-res]', v).forEach(b=> b.addEventListener('click', ()=>{ const [g,d] = b.dataset.res.split('|'); F.res = (F.res && F.res.g===g && F.res.dia===d) ? null : { g, dia:d }; renderQuadro(); }));
+  $$('.tl-d[data-qd]', v).forEach(b=> b.addEventListener('click', ()=>{ S.qdDia = b.dataset.qd; renderQuadro(); }));
+  $$('[data-ficha]', v).forEach(b=> b.addEventListener('click', ()=> abrirFicha(b.dataset.ficha)));
+  $$('[data-trecho]', v).forEach(b=> b.addEventListener('click', e=>{ e.stopPropagation(); const [p,i,f] = b.dataset.trecho.split('|'); modalTrecho(p, +i, +f); }));
+  // clique no espaço vazio da linha (dia futuro): marca o que já se sabe (férias, manutenção programada)
+  $$('.tl-trilha', v).forEach(t=> t.addEventListener('click', e=>{ if(e.target!==t) return; const r = t.getBoundingClientRect(), i = Math.floor((e.clientX - r.left)/r.width*n); if(i>=0 && i<n) modalStatus(t.dataset.tr, dias[i], renderQuadro); }));
+  // rola até perto de hoje
+  const tl = $('.tl', v), th = $('.tl-d.hoje', v); if(tl && th && tl.scrollWidth > tl.clientWidth) tl.scrollLeft = Math.max(0, th.offsetLeft - tl.clientWidth*0.6);
+}
+// os dias de um trecho, com o status e a observação de cada um
+function modalTrecho(placa, i0, i1){
+  const v = S.veic.find(x=>x.placa===placa); if(!v) return;
+  const dias = Array.from({length:i1-i0+1}, (_,k)=> diaDoMes(S.mes, i0+k+1)), g = grupoDe(placa, dias[0]);
+  const t = { g, dias }, nome = nomeTrecho(placa, t), len = dias.length;
+  abrirModal(`<div class="modal-h"><div><h3><span class="tl-ico k-${g}" style="vertical-align:-6px">${ICO[g]}</span> ${esc(nome)} · ${len} ${len>1?'dias':'dia'}</h3><div class="sub"><b class="mono">${esc(placa)}</b> · ${esc(v.motorista||'sem motorista')} · de ${esc(fDia(dias[0]))}${len>1?' a '+esc(fDia(dias[len-1])):''}</div></div><button class="x" data-close aria-label="Fechar">✕</button></div>
+    <div class="modal-b"><div class="tr-dias">${dias.map(d=>{ const r = reg(placa,d), st = r && r.status ? S.status[r.status] : null;
+      return `<button type="button" class="tr-dia" data-d="${d}" ${podeEscrever()?'':'disabled'} title="${podeEscrever()?'Mudar o status deste dia':''}"><span class="mono">${esc(dm(d))}</span><span class="dot" style="background:${st?esc(st.cor):'transparent'};${st?'':'border:1px dashed var(--amber)'}"></span><b>${esc(st?st.nome:'Sem lançamento')}</b>${r&&r.obs?`<span class="sub">${esc(r.obs)}</span>`:''}${r&&r.atualizado_por&&r.atualizado_por.includes('@')?`<span class="sub">lançado por ${esc(r.atualizado_por)}</span>`:''}</button>`; }).join('')}</div></div>
+    <div class="modal-f"><button class="btn" type="button" data-close>Fechar</button><button class="btn pri" type="button" id="tr-ficha">Abrir o cadastro do conjunto</button></div>`, bg=>{
+    $('#tr-ficha', bg).addEventListener('click', ()=>{ fecharModal(); abrirFicha(placa); });
+    $$('[data-d]', bg).forEach(b=> b.addEventListener('click', ()=>{ fecharModal(); modalStatus(placa, b.dataset.d, ()=>{ if(S.view==='quadro') renderQuadro(); }); }));
+  });
 }
 
 /* ---------- PAINEL (o antigo Dashboard, em gráficos; mesmos números das outras telas) ---------- */
@@ -822,7 +927,8 @@ function tourPassos(){
     { v:'painel', alvo:()=> $('#view-painel .pn-grade'), t:'Os gráficos levam ao caso', x:'Disponibilidade dia a dia, como a frota passou cada dia, faturamento por grid e as placas onde mais falta. <b>Clique numa barra, num ponto ou numa placa</b> e o sistema mostra quem está por trás do número.' },
     { v:'hoje', alvo:()=> $('#view-hoje .chips'), t:'Hoje: a frota em um minuto', x:'Quantos conjuntos estão rodando, parados, em manutenção, sem motorista ou sem lançamento. <b>Clique num número</b> para a lista mostrar só aqueles. A data no alto troca o dia.' },
     { v:'hoje', alvo:()=> $('#view-hoje .cj'), t:'Um conjunto por linha', x:'Placa, grid, motorista, como estava ontem e o status de hoje. Quem está sem lançamento e quem está parado há mais tempo aparece primeiro.' + (pap==='leitura' ? ' Quem lança o status é o programador.' : ' Clique no status para mudar; <b>Igual a ontem</b> repete o dia anterior.') },
-    { v:'quadro', alvo:()=> $('#view-quadro .qd-wrap') || $('#view-quadro .card'), t:'Quadro do mês', x:'A aba Disponibilidade, em cores: um quadrinho por dia. As linhas de cima são o antigo Resumo. <b>Clique num número</b> do resumo para ver quais conjuntos são, ou num quadrinho para ver o dia daquele conjunto.' },
+    { v:'quadro', alvo:()=> $('#view-quadro .tl-resumo'), t:'Quadro do mês: o resumo do dia', x:'Quantos conjuntos estão disponíveis, rodando, em manutenção, sem motorista ou em SSMA no dia. <b>Clique num cartão</b> para a lista mostrar só aqueles, ou num dia do eixo para ver outro dia.' },
+    { v:'quadro', alvo:()=> $('#view-quadro .tl-corpo .tl-row'), t:'A linha do tempo de cada conjunto', x:'Cada barra é um trecho de dias no mesmo status: "Manutenção corretiva · 12d" de uma vez, sem contar quadradinho. <b>Clique na placa</b> para abrir o cadastro do conjunto e da operação, ou <b>numa barra</b> para ver os dias e as observações.' },
     { v:'faturamento', alvo:()=> $('#view-faturamento .kpis'), t:'Faturamento × meta', x:'A meta do mês, quanto já deveria ter faturado até ontem, o que foi faturado e o <b>ritmo</b>. É a conta do Dashboard, por grid, sem fórmula para quebrar.' },
     { v:'faturamento', alvo:()=> ult('#view-faturamento .tbl-wrap'), t:'Quem está fora do ritmo', x:'As placas críticas vêm primeiro, com os dias parados, o motivo e a justificativa. <b>Clique numa placa</b> para ver o mês inteiro dela.' },
     { v:'sugestoes', alvo:()=> $('#ac-btn'), t:'Dúvida ou ideia? 💬', x:'Este botão fica em todas as telas. Dá para escrever, <b>falar</b> ou mandar um print. A resposta volta para você aqui, na tela Sugestões.' },
