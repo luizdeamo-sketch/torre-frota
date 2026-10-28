@@ -1,5 +1,5 @@
 /* Acompanhante da Torre de Controle (mesma lógica do CRM Aliança e do Stayline): aviso de versão nova · registro de uso · balão 💬.
-   Gatilhos do balão: travou (3 cliques em 1 s), recusa (aviso de erro), desfez (voltou o status logo depois), voltou (A→B→A em 30 s).
+   Gatilhos do balão: travou (3 cliques em 1 s), recusa (aviso de erro), desfez (voltou o status logo depois), voltou (A→B→A em 30 s, só na 3ª vez em 10 min).
    O de "primeira vez numa tela" fica desligado: na LCA foi ignorado em quase todas as vezes.
    Anota telas abertas e botões clicados. Nunca anota o que a pessoa digita nos campos. */
 (function(){
@@ -58,8 +58,15 @@ function checarTela(){
   if(!email()) return; const r = rota(); if(r===rotaCur) return; const ant = rotaCur;
   uso('tela', nomeTela(), { anterior:ant, ms_na_anterior: ant ? Date.now()-tsTela : null }); rotaCur = r; tsTela = Date.now();
   trilha.push({ r, t:Date.now() }); if(trilha.length > 3) trilha.shift();
-  if(trilha.length===3 && trilha[0].r===trilha[2].r && trilha[1].r!==trilha[0].r && trilha[2].t-trilha[0].t < 30000 && r!=='/login'){ uso('voltou', nomeTela()); duvida('voltou'); }
+  if(trilha.length===3 && trilha[0].r===trilha[2].r && trilha[1].r!==trilha[0].r && trilha[2].t-trilha[0].t < 30000 && r!=='/login'){
+    uso('voltou', nomeTela());
+    // quem está explorando vai e volta o tempo todo (o Marcos ignorou o balão 3 vezes em 28/10):
+    // o balão só se oferece na 3ª ida e volta em 10 minutos
+    const agora = Date.now(); idasVoltas.push(agora); while(idasVoltas.length && agora - idasVoltas[0] > 600000) idasVoltas.shift();
+    if(idasVoltas.length >= 3){ idasVoltas.length = 0; duvida('voltou'); }
+  }
 }
+const idasVoltas = [];
 setInterval(checarTela, 700);
 document.addEventListener('visibilitychange', ()=>{ if(document.hidden){ uso('saida', nomeTela(), { ms_na_tela: Date.now()-tsTela }); flush(); } else tsTela = Date.now(); });
 function rotulo(el){
