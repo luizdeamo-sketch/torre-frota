@@ -9,7 +9,13 @@ const CONFIG = {
   anon: 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Iml1b3R2b3R0bmFpbG9meGJheW54Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3OTI1Mjg2NjMsImV4cCI6MjEwODEwNDY2M30._0FhywQ4Vq3km5Rl4tHEPtCLBVom4VAGaXG3X3nrUyQ'
 };
 const NOME = 'Torre de Controle - ' + CONFIG.empresa;
-const sb = window.supabase.createClient(CONFIG.url, CONFIG.anon);
+// sessão própria (29/10): o Stayline e o CRM moram no mesmo endereço (luizdeamo-sketch.github.io) e usam o mesmo banco.
+// Com a chave padrão os três dividiam a sessão: entrar aqui acordava os outros, que não acham o e-mail no cadastro
+// deles e faziam logout global, derrubando este login no mesmo segundo. Quem já estava logado leva a sessão junto uma vez.
+const CHAVE_SESSAO = 'frt-torre-frota-auth';
+try{ const padrao = 'sb-' + new URL(CONFIG.url).hostname.split('.')[0] + '-auth-token';
+  if(!localStorage.getItem(CHAVE_SESSAO) && localStorage.getItem(padrao) && !localStorage.getItem('frt_sessao_migrada')){ localStorage.setItem(CHAVE_SESSAO, localStorage.getItem(padrao)); localStorage.setItem('frt_sessao_migrada', '1'); } }catch(e){}
+const sb = window.supabase.createClient(CONFIG.url, CONFIG.anon, { auth:{ storageKey:CHAVE_SESSAO, persistSession:true, autoRefreshToken:true } });
 // grupos que a tela mostra (chips e resumo); o "disponível" vem do catálogo frt_status
 const GRUPOS = [
   { k:'rodando', nome:'Rodando', cor:'blue', curto:'carregando, em viagem ou voltando', desc:'Carregando, em viagem, descarregando ou voltando vazio' },
@@ -110,7 +116,7 @@ $('#pa-btn').addEventListener('click', async ()=>{
   }catch(e){ m.hidden = false; m.textContent = PA_MSG.erro; }
   b.disabled = false;
 });
-$('#btn-sair').addEventListener('click', async ()=>{ await sb.auth.signOut(); });
+$('#btn-sair').addEventListener('click', async ()=>{ await sb.auth.signOut({ scope:'local' }); });
 
 let iniciado = false;
 sb.auth.onAuthStateChange((ev, session)=>{ setTimeout(()=> sessao(session), 0); });
@@ -119,7 +125,7 @@ async function sessao(session){
   if(iniciado && S.email === session.user.email.toLowerCase()) return;
   S.email = session.user.email.toLowerCase();
   const { data } = await sb.from('frt_membros').select('*').ilike('email', S.email).maybeSingle();
-  if(!data || !data.ativo){ await sb.auth.signOut(); telaLogin('Este e-mail não tem acesso a esta torre. Fale com o gestor.'); return; }
+  if(!data || !data.ativo){ await sb.auth.signOut({ scope:'local' }); telaLogin('Este e-mail não tem acesso a esta torre. Fale com o gestor.'); return; }
   S.membro = data; iniciado = true;
   $('#login').hidden = true; $('#app').hidden = false;
   const PAP = { admin:'Gestor', programador:'Programador', leitura:'Leitura' };
