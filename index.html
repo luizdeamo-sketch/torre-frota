@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
-<meta name="app-build" content="202610291506">
+<meta name="app-build" content="202611031401">
 <title>Torre de Controle - Transpanorama</title>
 <link rel="icon" href="favicon.png" type="image/png">
 <link rel="preconnect" href="https://fonts.googleapis.com">
@@ -334,6 +334,15 @@ table.tb tbody tr:hover td{background:var(--panel-2)}
 .pn-custo .pn-tl{grid-template-columns:minmax(240px,1.2fr) minmax(0,1.6fr) 96px}
 .pn-tn b{display:flex;align-items:center;gap:6px}
 
+/* análise */
+.an-d{font-weight:700;font-size:12px;white-space:nowrap} .an-d.bom{color:var(--green)} .an-d.ruim{color:var(--red)}
+.an-tb td,.an-tb th{white-space:nowrap;padding:9px 8px} .an-tb td:first-child{white-space:normal}
+.an-mot{max-width:230px;overflow:hidden;text-overflow:ellipsis}
+.pn-custo .pn-tv,.pn-top .pn-tv{white-space:nowrap}
+.an-dias{position:relative;display:grid;grid-template-columns:repeat(var(--n),minmax(0,1fr));gap:3px;height:180px;align-items:end;border-bottom:1px solid var(--line)}
+.an-dia{height:100%;display:flex;align-items:flex-end} .an-dia i{display:block;width:100%;border-radius:4px 4px 0 0;min-height:2px} .an-dia.fut{background:repeating-linear-gradient(45deg,transparent,transparent 3px,var(--panel-2) 3px,var(--panel-2) 6px)}
+.an-meta{position:absolute;left:0;right:0;border-top:2px dashed var(--gold);pointer-events:none}
+
 /* passo a passo */
 #tour-luz{position:fixed;z-index:400;border:3px solid var(--gold);border-radius:12px;box-shadow:0 0 0 9999px var(--veu);pointer-events:none;transition:all .25s ease}
 #tour-luz.cheio{inset:0;border:0;border-radius:0;box-shadow:none;background:var(--veu)}
@@ -409,6 +418,7 @@ table.tb tbody tr:hover td{background:var(--panel-2)}
     <div class="brand"><div><img class="marca" src="logo-transpanorama.png" alt="Transpanorama" width="424" height="58"><b>Torre de Controle</b><small>Desde 1986 · Maringá/PR</small></div></div>
     <button type="button" class="nav" data-view="apresentacao"><svg viewBox="0 0 24 24"><path d="M4 5h16v11H4zM8 20h8M12 16v4"/></svg><span>Apresentação</span></button>
     <button type="button" class="nav" data-view="painel"><svg viewBox="0 0 24 24"><rect x="3" y="3" width="8" height="8" rx="1.5"/><rect x="13" y="3" width="8" height="5" rx="1.5"/><rect x="13" y="10" width="8" height="11" rx="1.5"/><rect x="3" y="13" width="8" height="8" rx="1.5"/></svg><span>Painel</span></button>
+    <button type="button" class="nav" data-view="analise"><svg viewBox="0 0 24 24"><circle cx="10.5" cy="10.5" r="6.5"/><path d="M15.5 15.5L21 21M7.5 12.5l2-2.5 2 1.5 2.5-3.5"/></svg><span>Análise</span></button>
     <button type="button" class="nav" data-view="hoje"><svg viewBox="0 0 24 24"><path d="M3 7h11v9H3zM14 10h4l3 3v3h-7"/><circle cx="7" cy="17.5" r="1.8"/><circle cx="17" cy="17.5" r="1.8"/></svg><span>Hoje</span></button>
     <button type="button" class="nav" data-view="quadro"><svg viewBox="0 0 24 24"><rect x="3" y="4" width="18" height="16" rx="2"/><path d="M3 9h18M8 4v16M13 4v16"/></svg><span>Quadro do mês</span></button>
     <button type="button" class="nav" data-view="faturamento"><svg viewBox="0 0 24 24"><path d="M4 19V9M10 19V5M16 19v-7M22 19H2"/></svg><span>Faturamento × meta</span></button>
@@ -428,6 +438,7 @@ table.tb tbody tr:hover td{background:var(--panel-2)}
     <main class="content">
       <section class="view" id="view-apresentacao"></section>
       <section class="view" id="view-painel"></section>
+      <section class="view" id="view-analise"></section>
       <section class="view" id="view-hoje"></section>
       <section class="view" id="view-quadro"></section>
       <section class="view" id="view-faturamento"></section>
@@ -440,7 +451,7 @@ table.tb tbody tr:hover td{background:var(--panel-2)}
 <div id="modal-root"></div>
 
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.45.4/dist/umd/supabase.min.js"></script>
-<script src="app.js?v=202610291506"></script>
-<script src="acompanhante.js?v=202610291506"></script>
+<script src="app.js?v=202611031401"></script>
+<script src="acompanhante.js?v=202611031401"></script>
 </body>
 </html>

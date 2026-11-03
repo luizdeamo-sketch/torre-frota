@@ -171,13 +171,14 @@ async function carregarMes(){
   const ant = somaDias(ini, -7);   // a semana anterior entra para contar "há N dias no status" no começo do mês
   const [dias, fat, just] = await Promise.all([
     buscarTudo(()=> sb.from('frt_dias').select('placa,dia,status,obs,atualizado_em,atualizado_por').gte('dia', ant).lte('dia', fim).order('dia').order('placa')),
-    buscarTudo(()=> sb.from('frt_faturamento').select('id,placa,valor,importado_em').eq('competencia', ini).order('id')),
+    buscarTudo(()=> sb.from('frt_faturamento').select('id,placa,valor,importado_em,emissao').eq('competencia', ini).order('id')),
     buscarTudo(()=> sb.from('frt_justificativas').select('*').eq('competencia', ini).order('placa')) ]);
   S.dias = new Map(); dias.forEach(d=> S.dias.set(d.placa+'|'+d.dia, d));
   S.just = {}; just.forEach(j=> S.just[j.placa] = j);
   S.fatImportado = fat.reduce((a,f)=> f.importado_em && (!a || f.importado_em > a) ? f.importado_em : a, null);
   S.fat = {}; S.fatLinhas = fat.length; const placas = new Set(S.veic.map(v=>v.placa)); S.fatFora = 0;
-  fat.forEach(f=>{ S.fat[f.placa] = (S.fat[f.placa]||0) + Number(f.valor||0); if(!placas.has(f.placa)) S.fatFora += Number(f.valor||0); });
+  S.fatDia = {}; S.cacheMes = {};
+  fat.forEach(f=>{ S.fat[f.placa] = (S.fat[f.placa]||0) + Number(f.valor||0); if(!placas.has(f.placa)) S.fatFora += Number(f.valor||0); if(f.emissao) S.fatDia[f.emissao] = (S.fatDia[f.emissao]||0) + Number(f.valor||0); });
 }
 const reg = (placa, dia) => S.dias.get(placa+'|'+dia);
 const stDe = (placa, dia) => { const r = reg(placa, dia); return r && r.status ? S.status[r.status] : null; };
@@ -211,8 +212,8 @@ async function salvarDia(placa, dia, status, obs, ate){
 }
 
 /* ---------- navegação ---------- */
-const VIEWS = ['apresentacao','painel','hoje','quadro','faturamento','sugestoes','equipe'];
-const TITULOS = { apresentacao:'Apresentação', painel:'Painel', hoje:'Hoje', quadro:'Quadro do mês', faturamento:'Faturamento × meta', sugestoes:'Sugestões', equipe:'Equipe' };
+const VIEWS = ['apresentacao','painel','analise','hoje','quadro','faturamento','sugestoes','equipe'];
+const TITULOS = { apresentacao:'Apresentação', painel:'Painel', analise:'Análise', hoje:'Hoje', quadro:'Quadro do mês', faturamento:'Faturamento × meta', sugestoes:'Sugestões', equipe:'Equipe' };
 $$('.nav').forEach(b=> b.addEventListener('click', ()=> irPara(b.dataset.view)));
 function irPara(v){
   if(!VIEWS.includes(v) || (v==='equipe' && !ehAdmin())) v = 'hoje';
@@ -224,7 +225,7 @@ function irPara(v){
 }
 function render(){
   $('#top-titulo').textContent = TITULOS[S.view];
-  ({ apresentacao:renderApresentacao, painel:renderPainel, hoje:renderHoje, quadro:renderQuadro, faturamento:renderFaturamento, sugestoes:renderSugestoes, equipe:renderEquipe })[S.view]();
+  ({ apresentacao:renderApresentacao, painel:renderPainel, analise:renderAnalise, hoje:renderHoje, quadro:renderQuadro, faturamento:renderFaturamento, sugestoes:renderSugestoes, equipe:renderEquipe })[S.view]();
 }
 
 /* ---------- barra de filtros comum (Hoje e Quadro) ---------- */
@@ -360,7 +361,7 @@ function renderApresentacao(){
     </div></div>
 
     <div class="sb-sec"><h3>O que a torre entrega</h3><div class="sb-cards">
-      <div class="card sb-card"><div class="verbo" style="font-size:16px">Painel</div><ul><li>O antigo Dashboard em gráficos: disponibilidade dia a dia e como a frota passou cada dia.</li><li>Faturamento × meta por grid e as placas onde o faturamento mais falta.</li><li>Clique num gráfico e veja os conjuntos por trás do número.</li></ul></div>
+      <div class="card sb-card"><div class="verbo" style="font-size:16px">Painel e Análise</div><ul><li>O antigo Dashboard em gráficos: disponibilidade dia a dia e como a frota passou cada dia.</li><li>Faturamento × meta por grid e as placas onde o faturamento mais falta.</li><li>Clique num gráfico e veja os conjuntos por trás do número.</li><li>Análise: o mês contra o anterior na mesma régua, os conjuntos que mais param e os que rodam mas faturam pouco.</li></ul></div>
       <div class="card sb-card"><div class="verbo" style="font-size:16px">Disponibilidade do dia</div><ul><li>Quantos estão rodando, parados, em manutenção ou sem motorista.</li><li>Quem ainda não foi lançado hoje.</li><li>Há quantos dias cada conjunto está no mesmo status.</li></ul></div>
       <div class="card sb-card"><div class="verbo" style="font-size:16px">Quadro do mês</div><ul><li>A linha do tempo de cada conjunto: os dias seguidos no mesmo status viram uma barra só ("Manutenção corretiva · 12d").</li><li>O resumo por dia (o antigo Resumo) com clique para ver quem é.</li><li>Filtro por programador, grid e operação.</li></ul></div>
       <div class="card sb-card"><div class="verbo" style="font-size:16px">Faturamento × meta</div><ul><li>Meta, esperado no ritmo, faturado e gap por grid.</li><li>As placas críticas primeiro, com o motivo dos dias parados.</li><li>A justificativa de cada placa fora do ritmo, escrita uma vez e guardada.</li><li>A mesma conta do antigo Dashboard, sem fórmula para quebrar.</li></ul></div>
@@ -593,6 +594,124 @@ function modalTrecho(placa, i0, i1){
     $('#tr-ficha', bg).addEventListener('click', ()=>{ fecharModal(); abrirFicha(placa); });
     $$('[data-d]', bg).forEach(b=> b.addEventListener('click', ()=>{ fecharModal(); modalStatus(placa, b.dataset.d, ()=>{ if(S.view==='quadro') renderQuadro(); }); }));
   });
+}
+
+/* ---------- ANÁLISE: mês contra mês, reincidentes, produtividade e faturamento por dia ---------- */
+// Pedido do Luiz (03/11): com outubro fechado e novembro começando, comparar os meses na mesma régua (os mesmos
+// primeiros dias), achar os conjuntos que mais param nos dois meses e separar "parou muito" de "rodou e faturou pouco".
+const mesAnt = m => { const [y,mm] = m.split('-').map(Number), d = new Date(y, mm-2, 1); return d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0'); };
+const nomeMes = m => new Date(m+'-15T12:00').toLocaleDateString('pt-BR',{ month:'long' });
+S.cacheMes = {};
+// os dados de um mês: o mês aberto já está em S; o outro vem do banco uma vez por sessão
+async function dadosMes(mes){
+  if(mes===S.mes) return { mes, dias:S.dias, fat:S.fat, fatDia:S.fatDia||{} };
+  if(S.cacheMes[mes]) return S.cacheMes[mes];
+  const ini = diaDoMes(mes,1), fim = diaDoMes(mes, diasDoMes(mes));
+  const [dias, fat] = await Promise.all([
+    buscarTudo(()=> sb.from('frt_dias').select('placa,dia,status').gte('dia', ini).lte('dia', fim).order('dia').order('placa')),
+    buscarTudo(()=> sb.from('frt_faturamento').select('id,placa,valor,emissao').eq('competencia', ini).order('id')) ]);
+  const m = new Map(); dias.forEach(d=> m.set(d.placa+'|'+d.dia, d));
+  const f = {}, fd = {}; fat.forEach(x=>{ f[x.placa] = (f[x.placa]||0) + Number(x.valor||0); if(x.emissao) fd[x.emissao] = (fd[x.emissao]||0) + Number(x.valor||0); });
+  return S.cacheMes[mes] = { mes, dias:m, fat:f, fatDia:fd };
+}
+// o mês resumido até o dia "ate", com a mesma regra das outras telas (disponível, meta proporcional, custo da parada)
+function resumoMes(D, ate){
+  const n = diasDoMes(D.mes), N = S.veic.length;
+  const R = { mes:D.mes, ate, n, disp:null, diasFech:0, ultFech:0, ind:0, porMot:{}, custo:0, porGrid:{}, fat:0, meta:0, porPlaca:new Map() };
+  const st = (p,d)=>{ const r = D.dias.get(p+'|'+d); return r && r.status ? S.status[r.status] : null; };
+  let soma = 0;
+  for(let d=1; d<=ate; d++){ const s = diaDoMes(D.mes,d); let lan = 0, dp = 0;
+    S.veic.forEach(x=>{ const t = st(x.placa,s); if(t){ lan++; if(t.disponivel) dp++; } });
+    if(N && lan > N/2){ R.diasFech++; R.ultFech = d; soma += dp/N; } }
+  R.disp = R.diasFech ? soma/R.diasFech : null;
+  S.veic.forEach(x=>{
+    const base = S.metas[D.mes+'|'+x.grid] || 0, dia = base/n; let entrou = 0, dd = 0, ii = 0, val = 0, ep = 0, emManut = false; const mot = {};
+    for(let d=1; d<=n; d++){ const s = diaDoMes(D.mes,d), t = st(x.placa,s); if(t && !entrou) entrou = d; if(d > ate) continue;
+      const manut = !!(t && GRUPO_DE[t.grupo]==='manut'); if(manut && !emManut) ep++; emManut = manut;
+      if(!t) continue;
+      if(t.disponivel){ dd++; continue; }
+      ii++; val += dia; mot[t.nome] = (mot[t.nome]||0)+1;
+      const c = R.porMot[t.nome] || (R.porMot[t.nome] = { g:GRUPO_DE[t.grupo], dias:0, valor:0 }); c.dias++; c.valor += dia; }
+    const metaP = entrou ? base*(n-entrou+1)/n : 0, fat = D.fat[x.placa] || 0;
+    R.meta += metaP; R.ind += ii; R.custo += val;
+    const gg = R.porGrid[x.grid] || (R.porGrid[x.grid] = { disp:0, lanc:0, fat:0, meta:0 }); gg.disp += dd; gg.lanc += dd+ii; gg.fat += fat; gg.meta += metaP;
+    R.porPlaca.set(x.placa, { disp:dd, ind:ii, valor:val, ep, mot, fat });
+  });
+  R.fat = Object.values(D.fat).reduce((a,b)=> a+b, 0);
+  return R;
+}
+const seta = (a, b, menorMelhor, fmt) => { if(a==null || b==null) return '<span class="sub">–</span>'; const d = a - b; if(Math.abs(d) < 1e-9) return '<span class="an-d">=</span>';
+  const bom = menorMelhor ? d < 0 : d > 0; return `<span class="an-d ${bom?'bom':'ruim'}">${d>0?'▲':'▼'} ${fmt(Math.abs(d))}</span>`; };
+const pp = x => (x*100).toFixed(1).replace('.',',')+' p.p.';
+async function renderAnalise(){
+  const v = $('#view-analise');
+  v.innerHTML = '<div class="card empty">Juntando os dois meses…</div>';
+  let A, B;
+  try{ A = await dadosMes(S.mes); B = await dadosMes(mesAnt(S.mes)); }catch(e){ v.innerHTML = `<div class="card empty">Não consegui carregar o mês anterior: ${esc(e.message||e)}</div>`; return; }
+  if(S.view!=='analise') return;
+  const hoje = hojeISO(), nA = diasDoMes(S.mes), mB = mesAnt(S.mes), nB = diasDoMes(mB);
+  const ateA = S.mes < hoje.slice(0,7) ? nA : S.mes > hoje.slice(0,7) ? 0 : +hoje.slice(8);
+  const k = resumoMes(A, ateA).ultFech || ateA;              // mesma régua: os dias já fechados do mês aberto
+  const rA = resumoMes(A, k), rB = resumoMes(B, Math.min(k, nB)), rBf = resumoMes(B, nB), rAt = resumoMes(A, ateA);
+  const temB = rBf.diasFech > 0;
+  const nA_ = nomeMes(S.mes), nB_ = nomeMes(mB);
+  const ritA = (()=>{ const esp = rA.meta * refDia() / nA; return esp ? rAt.fat/esp : null; })();
+  const pctB = rBf.meta ? rBf.fat / rBf.meta : null;
+  // por motivo: dias parados por dia, para comparar mês aberto e mês fechado
+  const mots = [...new Set([...Object.keys(rA.porMot), ...Object.keys(rB.porMot)])].map(nm=>{ const a = rA.porMot[nm], b = rB.porMot[nm];
+    return { nm, g:(a||b).g, a:a ? a.dias/k : 0, b:b ? b.dias/Math.max(1,Math.min(k,nB)) : 0, va:a ? a.valor : 0, vbf:(rBf.porMot[nm]||{}).valor || 0 }; }).sort((x,y)=> (y.a+y.b) - (x.a+x.b));
+  const grids = Object.keys(S.grids).map(g=>{ const a = rA.porGrid[g] || {}, b = rB.porGrid[g] || {}, bf = rBf.porGrid[g] || {};
+    return { g, dA:a.lanc ? a.disp/a.lanc : null, dB:b.lanc ? b.disp/b.lanc : null, mB:bf.meta ? bf.fat/bf.meta : null }; });
+  // reincidentes: os dois meses somados
+  const rein = S.veic.map(x=>{ const a = rAt.porPlaca.get(x.placa) || {}, b = rBf.porPlaca.get(x.placa) || {}; const mot = {};
+    [a.mot||{}, b.mot||{}].forEach(o=> Object.entries(o).forEach(([kk,q])=> mot[kk] = (mot[kk]||0)+q));
+    return { x, iA:a.ind||0, iB:b.ind||0, ep:(a.ep||0)+(b.ep||0), valor:(a.valor||0)+(b.valor||0), mot:Object.entries(mot).sort((p,q)=> q[1]-p[1])[0] }; })
+    .filter(r=> r.iA + r.iB > 0).sort((p,q)=> q.valor - p.valor).slice(0, 15);
+  // produtividade: faturado por dia disponível, no mês com mais dias (o fechado, enquanto o aberto tem menos de 10)
+  const rP = rAt.diasFech >= 10 || !temB ? rAt : rBf, mP = rP===rAt ? nA_ : nB_;
+  const prod = S.veic.map(x=>({ x, p:rP.porPlaca.get(x.placa) })).filter(o=> o.p && o.p.disp >= 5).map(o=>({ ...o, rd:o.p.fat/o.p.disp }));
+  const mediaRd = prod.length ? prod.reduce((a,o)=> a + o.p.fat, 0) / prod.reduce((a,o)=> a + o.p.disp, 0) : 0;
+  const baixos = prod.slice().sort((a,b)=> a.rd - b.rd).slice(0, 10);
+  // faturamento por dia (só quando a planilha traz a data de emissão: novembro em diante)
+  const fd = A.fatDia || {}, temDia = Object.keys(fd).length > 0, metaDia = rA.meta / nA;
+  const maxD = Math.max(metaDia, ...Object.values(fd), 1);
+  v.innerHTML = `<div class="head"><div><span class="eyebrow">Análise · ${esc(nA_)} × ${esc(nB_)}</span><h2>O que mudou de um mês para o outro</h2>
+      <p>Na mesma régua: de 1º a ${k} de ${esc(nA_)} contra de 1º a ${Math.min(k,nB)} de ${esc(nB_)}, e ${esc(nB_)} inteiro ao lado. Mesma regra das outras telas.</p></div>
+      <div class="acts"><select id="an-mes" class="btn" aria-label="Mês">${(S.meses||[S.mes]).map(m=>`<option value="${m}" ${m===S.mes?'selected':''}>${new Date(m+'-15T12:00').toLocaleDateString('pt-BR',{month:'long',year:'numeric'})}</option>`).join('')}</select></div></div>
+    ${!temB?`<div class="card empty">Ainda não há ${esc(nB_)} no sistema para comparar.</div>`:''}
+    <div class="kpis">
+      <div class="card kpi"><small>Disponibilidade média</small><b>${fP(rA.disp)}</b><div class="sub">${esc(nB_)} nos mesmos dias: ${fP(rB.disp)} ${seta(rA.disp, rB.disp, false, pp)}<br>${esc(nB_)} inteiro: ${fP(rBf.disp)}</div></div>
+      <div class="card kpi"><small>Conjuntos parados por dia</small><b>${(rA.ind/Math.max(1,k)).toFixed(1).replace('.',',')}</b><div class="sub">${esc(nB_)} nos mesmos dias: ${(rB.ind/Math.max(1,Math.min(k,nB))).toFixed(1).replace('.',',')} ${seta(rA.ind/Math.max(1,k), rB.ind/Math.max(1,Math.min(k,nB)), true, x=> x.toFixed(1).replace('.',','))}<br>${esc(nB_)} inteiro: ${(rBf.ind/nB).toFixed(1).replace('.',',')} por dia</div></div>
+      <div class="card kpi"><small>Custo da parada por dia</small><b>${fRk(rA.custo/Math.max(1,k))}</b><div class="sub">${esc(nB_)} nos mesmos dias: ${fRk(rB.custo/Math.max(1,Math.min(k,nB)))} ${seta(rA.custo/Math.max(1,k), rB.custo/Math.max(1,Math.min(k,nB)), true, fRk)}<br>${esc(nB_)} inteiro: ${fRk(rBf.custo)} no mês</div></div>
+      <div class="card kpi"><small>Faturamento</small><b>${fP(ritA)}</b><div class="sub">ritmo de ${esc(nA_)} até agora (${fRk(rAt.fat)})<br>${esc(nB_)} fechou em ${fP(pctB)} da meta (${fRk(rBf.fat)})</div></div>
+    </div>
+    <div class="pn-grade">
+      <section class="card pn-card"><div class="pn-h"><h3>Por que os conjuntos pararam</h3><span class="sub">conjuntos parados por dia, em cada motivo</span></div>
+        <div class="tbl-wrap"><table class="tb an-tb"><thead><tr><th>Motivo</th><th class="n">${esc(nA_)}</th><th class="n">${esc(nB_)}*</th><th>Variação</th><th class="n" title="${esc(nB_)} inteiro">R$ em ${esc(nB_)}</th></tr></thead><tbody>
+        ${mots.map(o=>`<tr style="cursor:default"><td><span class="tl-ico mini k-${o.g}" style="vertical-align:-5px">${ICO[o.g]}</span> ${esc(o.nm)}</td><td class="n">${o.a.toFixed(1).replace('.',',')}</td><td class="n">${o.b.toFixed(1).replace('.',',')}</td><td>${seta(o.a, o.b, true, x=> x.toFixed(1).replace('.',','))}</td><td class="n">${fRk(o.vbf)}</td></tr>`).join('') || '<tr><td colspan="5" class="muted">Sem paradas.</td></tr>'}
+        </tbody></table></div><p class="sub" style="margin:0">* ${esc(nB_)} nos mesmos dias (1º a ${Math.min(k,nB)}). Vermelho = piorou.</p></section>
+      <section class="card pn-card"><div class="pn-h"><h3>Grid a grid</h3><span class="sub">disponibilidade nos mesmos dias e como ${esc(nB_)} fechou</span></div>
+        <div class="tbl-wrap"><table class="tb an-tb"><thead><tr><th>Grid</th><th class="n">${esc(nA_)}</th><th class="n">${esc(nB_)}*</th><th>Variação</th><th class="n">${esc(nB_)}: % da meta</th></tr></thead><tbody>
+        ${grids.map(o=>`<tr data-grid="${esc(o.g)}" title="Abrir ${esc(S.grids[o.g].nome)} no Faturamento × meta"><td><b>${esc(S.grids[o.g].nome)}</b></td><td class="n">${fP(o.dA)}</td><td class="n">${fP(o.dB)}</td><td>${seta(o.dA, o.dB, false, pp)}</td><td class="n">${fP(o.mB)}</td></tr>`).join('')}
+        </tbody></table></div></section>
+      <section class="card pn-card pn-largo"><div class="pn-h"><h3><span class="tl-ico mini k-manut">${ICO.manut}</span> Os que mais param nos dois meses</h3><span class="sub">ordenados pelo custo da parada somado · clique para abrir o conjunto</span></div>
+        <div class="tbl-wrap"><table class="tb"><thead><tr><th>Placa</th><th>Motorista</th><th>Grid</th><th class="n" title="Dias parados em ${esc(nB_)}">Parado ${esc(nB_.slice(0,3))}.</th><th class="n" title="Dias parados em ${esc(nA_)}">Parado ${esc(nA_.slice(0,3))}.</th><th class="n" title="Quantas vezes entrou em manutenção (trechos separados)">Manutenções</th><th>Motivo principal</th><th class="n">Custo somado</th></tr></thead><tbody>
+        ${rein.map(r=>`<tr data-ficha="${esc(r.x.placa)}"><td class="mono"><b>${esc(r.x.placa)}</b></td><td class="an-mot" title="${esc(r.x.motorista||'')}">${esc(r.x.motorista||'–')}</td><td>${esc((S.grids[r.x.grid]||{}).nome||'')}</td><td class="n">${r.iB||''}</td><td class="n">${r.iA||''}</td><td class="n">${r.ep||''}</td><td class="sub">${r.mot?esc(r.mot[1]+' dias de '+r.mot[0].toLowerCase()):''}</td><td class="n"><b>${fRk(r.valor)}</b></td></tr>`).join('') || '<tr><td colspan="8" class="muted">Ninguém parado.</td></tr>'}
+        </tbody></table></div></section>
+      <section class="card pn-card pn-largo"><div class="pn-h"><h3><span class="tl-ico mini k-rodando">${ICO.rodando}</span> Rodou, mas faturou pouco</h3><span class="sub">${esc(mP)}: faturado por dia disponível · média da frota ${fR(mediaRd)} por dia</span></div>
+        <p class="sub" style="margin:0">Parar muito é problema de manutenção ou motorista. Rodar e faturar pouco é problema de programação, cota ou rota: são conversas diferentes. Aqui só entra quem ficou disponível 5 dias ou mais.</p>
+        <div class="pn-top">${baixos.map(o=>`<button type="button" class="pn-tl" data-ficha="${esc(o.x.placa)}"><span class="pn-tn"><b class="mono">${esc(o.x.placa)}</b><span class="sub">${o.p.disp} dias disponível · ${fRk(o.p.fat)} faturado · ${esc((S.grids[o.x.grid]||{}).nome||'')}</span></span>
+          <span class="pn-tb"><i style="width:${mediaRd?Math.min(100, o.rd/mediaRd*100):0}%;background:var(--g-rodando)"></i></span><b class="pn-tv" style="color:var(--ink)">${fR(o.rd)}/dia</b></button>`).join('') || '<div class="empty">Poucos dias para medir ainda.</div>'}</div></section>
+      ${temDia?`<section class="card pn-card pn-largo"><div class="pn-h"><h3><span class="tl-ico mini k-disp">${ICO.dinheiro}</span> Faturamento por dia em ${esc(nA_)}</h3><span class="sub">pela data de emissão do CT-e · tracejado = meta do dia (${fRk(metaDia)})</span></div>
+        <div class="an-dias" style="--n:${nA}">${Array.from({length:nA},(_,i)=>{ const d = diaDoMes(S.mes,i+1), val = fd[d] || 0;
+          return `<div class="an-dia ${d>hoje?'fut':''}" title="${esc(fDia(d))}: ${fR(val)}${metaDia?' · '+fP(val/metaDia)+' da meta do dia':''}"><i style="height:${val/maxD*100}%;background:${val>=metaDia?'var(--green)':'var(--g-rodando)'}"></i></div>`; }).join('')}
+          <span class="an-meta" style="bottom:${metaDia/maxD*100}%"></span></div>
+        <div class="pn-dias" style="grid-template-columns:repeat(${nA},1fr);margin-left:0">${Array.from({length:nA},(_,i)=>`<span>${(i+1)===1||(i+1)%5===0?i+1:''}</span>`).join('')}</div>
+        <p class="sub" style="margin:0">${esc(nB_)} não entra aqui: a planilha dele veio sem a data de emissão ("########").</p></section>`:''}
+    </div>`;
+  $('#an-mes', v).addEventListener('change', async e=>{ S.mes = e.target.value; lsSet('frt_mes', S.mes); await carregarMes(); renderAnalise(); });
+  $$('[data-ficha]', v).forEach(b=> b.addEventListener('click', ()=> abrirFicha(b.dataset.ficha)));
+  $$('[data-grid]', v).forEach(b=> b.addEventListener('click', ()=>{ S.fatF.grid = b.dataset.grid; S.fatF.sit = ''; irPara('faturamento'); }));
 }
 
 /* ---------- PAINEL (o antigo Dashboard, em gráficos; mesmos números das outras telas) ---------- */
@@ -981,7 +1100,8 @@ function tourPassos(){
     { v:'apresentacao', alvo:()=> $('.side'), t:'O menu', x:'Cada tela responde a uma pergunta. <b>Apresentação</b> explica o que é a torre e o que a planilha escondia. No celular, o menu fica no topo: arraste para o lado.' },
     { v:'painel', alvo:()=> $('#view-painel .pn-kpis'), t:'Painel: o Dashboard em gráficos', x:'Os números do mês num olhar: disponíveis, disponibilidade média, ritmo do faturamento, quanto falta para a meta e as placas críticas. <b>Clique num número</b> para abrir a tela com os detalhes.' },
     { v:'painel', alvo:()=> $('#view-painel .pn-grade'), t:'Os gráficos levam ao caso', x:'Disponibilidade dia a dia, como a frota passou cada dia, faturamento por grid e as placas onde mais falta. <b>Clique numa barra, num ponto ou numa placa</b> e o sistema mostra quem está por trás do número.' },
-    { v:'hoje', alvo:()=> $('#view-hoje .chips'), t:'Hoje: a frota em um minuto', x:'Quantos conjuntos estão rodando, parados, em manutenção, sem motorista ou sem lançamento. <b>Clique num número</b> para a lista mostrar só aqueles. A data no alto troca o dia.' },
+    { v:'analise', alvo:()=> $('#view-analise .kpis'), t:'Análise: o mês contra o anterior', x:'Os mesmos primeiros dias dos dois meses, lado a lado: disponibilidade, conjuntos parados, custo da parada e faturamento. Embaixo, <b>os que mais param</b> nos dois meses e <b>os que rodam mas faturam pouco</b>.' },
+    { v:'hoje', alvo:()=> $('#view-hoje .tl-cards'), t:'Hoje: a frota em um minuto', x:'Quantos conjuntos estão rodando, parados, em manutenção, sem motorista ou sem lançamento. <b>Clique num número</b> para a lista mostrar só aqueles. A data no alto troca o dia.' },
     { v:'hoje', alvo:()=> $('#view-hoje .cj'), t:'Um conjunto por linha', x:'Placa, grid, motorista, como estava ontem e o status de hoje. Quem está sem lançamento e quem está parado há mais tempo aparece primeiro.' + (pap==='leitura' ? ' Quem lança o status é o programador.' : ' Clique no status para mudar; <b>Igual a ontem</b> repete o dia anterior.') },
     { v:'quadro', alvo:()=> $('#view-quadro .tl-resumo'), t:'Quadro do mês: o resumo do dia', x:'Quantos conjuntos estão disponíveis, rodando, em manutenção, sem motorista ou em SSMA no dia. <b>Clique num cartão</b> para a lista mostrar só aqueles, ou num dia do eixo para ver outro dia.' },
     { v:'quadro', alvo:()=> $('#view-quadro .tl-corpo .tl-row'), t:'A linha do tempo de cada conjunto', x:'Cada barra é um trecho de dias no mesmo status: "Manutenção corretiva · 12d" de uma vez, sem contar quadradinho. <b>Clique na placa</b> para abrir o cadastro do conjunto e da operação, ou <b>numa barra</b> para ver os dias e as observações.' },
