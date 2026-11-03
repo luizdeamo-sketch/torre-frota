@@ -617,13 +617,15 @@ async function dadosMes(mes){
 // o mês resumido até o dia "ate", com a mesma regra das outras telas (disponível, meta proporcional, custo da parada)
 function resumoMes(D, ate){
   const n = diasDoMes(D.mes), N = S.veic.length;
-  const R = { mes:D.mes, ate, n, disp:null, diasFech:0, ultFech:0, ind:0, porMot:{}, custo:0, porGrid:{}, fat:0, meta:0, porPlaca:new Map() };
+  const R = { mes:D.mes, ate, n, disp:null, diasFech:0, ultFech:0, ind:0, porMot:{}, custo:0, porGrid:{}, fat:0, meta:0, porPlaca:new Map(), lanDias:0, dispDias:0 };
   const st = (p,d)=>{ const r = D.dias.get(p+'|'+d); return r && r.status ? S.status[r.status] : null; };
   let soma = 0;
   for(let d=1; d<=ate; d++){ const s = diaDoMes(D.mes,d); let lan = 0, dp = 0;
     S.veic.forEach(x=>{ const t = st(x.placa,s); if(t){ lan++; if(t.disponivel) dp++; } });
+    R.lanDias += lan; R.dispDias += dp;
     if(N && lan > N/2){ R.diasFech++; R.ultFech = d; soma += dp/N; } }
-  R.disp = R.diasFech ? soma/R.diasFech : null;
+  R.disp = R.lanDias ? R.dispDias/R.lanDias : null;          // sobre o que foi lançado: mês aberto e fechado comparáveis
+  R.lanMedio = ate ? R.lanDias/ate : 0;
   S.veic.forEach(x=>{
     const base = S.metas[D.mes+'|'+x.grid] || 0, dia = base/n; let entrou = 0, dd = 0, ii = 0, val = 0, ep = 0, emManut = false; const mot = {};
     for(let d=1; d<=n; d++){ const s = diaDoMes(D.mes,d), t = st(x.placa,s); if(t && !entrou) entrou = d; if(d > ate) continue;
@@ -658,8 +660,10 @@ async function renderAnalise(){
   const ritA = (()=>{ const esp = rA.meta * refDia() / nA; return esp ? rAt.fat/esp : null; })();
   const pctB = rBf.meta ? rBf.fat / rBf.meta : null;
   // por motivo: dias parados por dia, para comparar mês aberto e mês fechado
+  const parc = (r, q) => r.lanDias ? q / r.lanDias : 0;   // parcela dos conjuntos lançados
   const mots = [...new Set([...Object.keys(rA.porMot), ...Object.keys(rB.porMot)])].map(nm=>{ const a = rA.porMot[nm], b = rB.porMot[nm];
-    return { nm, g:(a||b).g, a:a ? a.dias/k : 0, b:b ? b.dias/Math.max(1,Math.min(k,nB)) : 0, va:a ? a.valor : 0, vbf:(rBf.porMot[nm]||{}).valor || 0 }; }).sort((x,y)=> (y.a+y.b) - (x.a+x.b));
+    return { nm, g:(a||b).g, a:a ? parc(rA, a.dias) : 0, b:b ? parc(rB, b.dias) : 0, vbf:(rBf.porMot[nm]||{}).valor || 0 }; }).sort((x,y)=> (y.a+y.b) - (x.a+x.b));
+  const N = S.veic.length, custoDia = r => r.lanDias ? r.custo / r.lanDias * N : 0;   // por dia, como se a frota toda tivesse sido lançada
   const grids = Object.keys(S.grids).map(g=>{ const a = rA.porGrid[g] || {}, b = rB.porGrid[g] || {}, bf = rBf.porGrid[g] || {};
     return { g, dA:a.lanc ? a.disp/a.lanc : null, dB:b.lanc ? b.disp/b.lanc : null, mB:bf.meta ? bf.fat/bf.meta : null }; });
   // reincidentes: os dois meses somados
@@ -676,19 +680,19 @@ async function renderAnalise(){
   const fd = A.fatDia || {}, temDia = Object.keys(fd).length > 0, metaDia = rA.meta / nA;
   const maxD = Math.max(metaDia, ...Object.values(fd), 1);
   v.innerHTML = `<div class="head"><div><span class="eyebrow">Análise · ${esc(nA_)} × ${esc(nB_)}</span><h2>O que mudou de um mês para o outro</h2>
-      <p>Na mesma régua: de 1º a ${k} de ${esc(nA_)} contra de 1º a ${Math.min(k,nB)} de ${esc(nB_)}, e ${esc(nB_)} inteiro ao lado. Mesma regra das outras telas.</p></div>
+      <p>Na mesma régua: de 1º a ${k} de ${esc(nA_)} contra de 1º a ${Math.min(k,nB)} de ${esc(nB_)}, e ${esc(nB_)} inteiro ao lado. As porcentagens são sobre os conjuntos lançados${rA.lanMedio < N - 0.5 ? `: em ${esc(nA_)} foram lançados, em média, <b>${Math.round(rA.lanMedio)} de ${N}</b> conjuntos por dia (${esc(nB_)}: ${Math.round(rB.lanMedio)})` : ''}.</p></div>
       <div class="acts"><select id="an-mes" class="btn" aria-label="Mês">${(S.meses||[S.mes]).map(m=>`<option value="${m}" ${m===S.mes?'selected':''}>${new Date(m+'-15T12:00').toLocaleDateString('pt-BR',{month:'long',year:'numeric'})}</option>`).join('')}</select></div></div>
     ${!temB?`<div class="card empty">Ainda não há ${esc(nB_)} no sistema para comparar.</div>`:''}
     <div class="kpis">
-      <div class="card kpi"><small>Disponibilidade média</small><b>${fP(rA.disp)}</b><div class="sub">${esc(nB_)} nos mesmos dias: ${fP(rB.disp)} ${seta(rA.disp, rB.disp, false, pp)}<br>${esc(nB_)} inteiro: ${fP(rBf.disp)}</div></div>
-      <div class="card kpi"><small>Conjuntos parados por dia</small><b>${(rA.ind/Math.max(1,k)).toFixed(1).replace('.',',')}</b><div class="sub">${esc(nB_)} nos mesmos dias: ${(rB.ind/Math.max(1,Math.min(k,nB))).toFixed(1).replace('.',',')} ${seta(rA.ind/Math.max(1,k), rB.ind/Math.max(1,Math.min(k,nB)), true, x=> x.toFixed(1).replace('.',','))}<br>${esc(nB_)} inteiro: ${(rBf.ind/nB).toFixed(1).replace('.',',')} por dia</div></div>
-      <div class="card kpi"><small>Custo da parada por dia</small><b>${fRk(rA.custo/Math.max(1,k))}</b><div class="sub">${esc(nB_)} nos mesmos dias: ${fRk(rB.custo/Math.max(1,Math.min(k,nB)))} ${seta(rA.custo/Math.max(1,k), rB.custo/Math.max(1,Math.min(k,nB)), true, fRk)}<br>${esc(nB_)} inteiro: ${fRk(rBf.custo)} no mês</div></div>
+      <div class="card kpi"><small>Disponibilidade (dos lançados)</small><b>${fP(rA.disp)}</b><div class="sub">${esc(nB_)} nos mesmos dias: ${fP(rB.disp)} ${seta(rA.disp, rB.disp, false, pp)}<br>${esc(nB_)} inteiro: ${fP(rBf.disp)}</div></div>
+      <div class="card kpi"><small>Parados (dos lançados)</small><b>${fP(parc(rA, rA.ind))}</b><div class="sub">${esc(nB_)} nos mesmos dias: ${fP(parc(rB, rB.ind))} ${seta(parc(rA, rA.ind), parc(rB, rB.ind), true, pp)}<br>${esc(nB_)} inteiro: ${fP(parc(rBf, rBf.ind))}</div></div>
+      <div class="card kpi"><small>Custo da parada por dia</small><b>${fRk(custoDia(rA))}</b><div class="sub">${esc(nB_)} nos mesmos dias: ${fRk(custoDia(rB))} ${seta(custoDia(rA), custoDia(rB), true, fRk)}<br>${esc(nB_)} inteiro: ${fRk(rBf.custo)} no mês</div></div>
       <div class="card kpi"><small>Faturamento</small><b>${fP(ritA)}</b><div class="sub">ritmo de ${esc(nA_)} até agora (${fRk(rAt.fat)})<br>${esc(nB_)} fechou em ${fP(pctB)} da meta (${fRk(rBf.fat)})</div></div>
     </div>
     <div class="pn-grade">
-      <section class="card pn-card"><div class="pn-h"><h3>Por que os conjuntos pararam</h3><span class="sub">conjuntos parados por dia, em cada motivo</span></div>
+      <section class="card pn-card"><div class="pn-h"><h3>Por que os conjuntos pararam</h3><span class="sub">% dos conjuntos lançados parados em cada motivo</span></div>
         <div class="tbl-wrap"><table class="tb an-tb"><thead><tr><th>Motivo</th><th class="n">${esc(nA_)}</th><th class="n">${esc(nB_)}*</th><th>Variação</th><th class="n" title="${esc(nB_)} inteiro">R$ em ${esc(nB_)}</th></tr></thead><tbody>
-        ${mots.map(o=>`<tr style="cursor:default"><td><span class="tl-ico mini k-${o.g}" style="vertical-align:-5px">${ICO[o.g]}</span> ${esc(o.nm)}</td><td class="n">${o.a.toFixed(1).replace('.',',')}</td><td class="n">${o.b.toFixed(1).replace('.',',')}</td><td>${seta(o.a, o.b, true, x=> x.toFixed(1).replace('.',','))}</td><td class="n">${fRk(o.vbf)}</td></tr>`).join('') || '<tr><td colspan="5" class="muted">Sem paradas.</td></tr>'}
+        ${mots.map(o=>`<tr style="cursor:default"><td><span class="tl-ico mini k-${o.g}" style="vertical-align:-5px">${ICO[o.g]}</span> ${esc(o.nm)}</td><td class="n">${fP(o.a)}</td><td class="n">${fP(o.b)}</td><td>${seta(o.a, o.b, true, pp)}</td><td class="n">${fRk(o.vbf)}</td></tr>`).join('') || '<tr><td colspan="5" class="muted">Sem paradas.</td></tr>'}
         </tbody></table></div><p class="sub" style="margin:0">* ${esc(nB_)} nos mesmos dias (1º a ${Math.min(k,nB)}). Vermelho = piorou.</p></section>
       <section class="card pn-card"><div class="pn-h"><h3>Grid a grid</h3><span class="sub">disponibilidade nos mesmos dias e como ${esc(nB_)} fechou</span></div>
         <div class="tbl-wrap"><table class="tb an-tb"><thead><tr><th>Grid</th><th class="n">${esc(nA_)}</th><th class="n">${esc(nB_)}*</th><th>Variação</th><th class="n">${esc(nB_)}: % da meta</th></tr></thead><tbody>
