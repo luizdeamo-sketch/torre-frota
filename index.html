@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
-<meta name="app-build" content="202611031403">
+<meta name="app-build" content="202611111625">
 <title>Torre de Controle - Transpanorama</title>
 <link rel="icon" href="favicon.png" type="image/png">
 <link rel="preconnect" href="https://fonts.googleapis.com">
@@ -205,6 +205,8 @@ table.tb tbody tr:hover td{background:var(--panel-2)}
 .meter i{display:block;height:100%;border-radius:5px;background:var(--green)}
 .meter i.mid{background:#e08a1e} .meter i.low{background:var(--red)}
 .meter u{position:absolute;top:-2px;bottom:-2px;width:2px;background:var(--ink)}
+/* pronto antes da segunda: só o gestor vê, com borda roxa tracejada (regra da versão de segunda) */
+.pre-lib{outline:2px dashed #7c3aed;outline-offset:2px}
 
 /* apresentação */
 .sb{display:grid;gap:16px}
@@ -451,7 +453,7 @@ table.tb tbody tr:hover td{background:var(--panel-2)}
 <div id="modal-root"></div>
 
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.45.4/dist/umd/supabase.min.js"></script>
-<script src="app.js?v=202611031403"></script>
-<script src="acompanhante.js?v=202611031403"></script>
+<script src="app.js?v=202611111625"></script>
+<script src="acompanhante.js?v=202611111625"></script>
 </body>
 </html>

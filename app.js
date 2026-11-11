@@ -60,6 +60,10 @@ const toast = m => window.showToast(m);
 const ehAdmin = ()=> S.membro && S.membro.papel==='admin';
 const podeEscrever = ()=> S.membro && (S.membro.papel==='admin' || S.membro.papel==='programador');
 function guard(){ if(!podeEscrever()){ toast('Somente leitura: peça ao gestor para liberar a edição.'); return false; } return true; }
+// versão nova sai às segundas (regra da casa): o que fica pronto antes aparece só para o gestor, com borda roxa e 🔒
+const LIBERA = '2026-11-16';
+const liberado = ()=> ehAdmin() || hojeISO() >= LIBERA;
+const preLib = ()=> hojeISO() < LIBERA ? ' pre-lib' : '';
 $$('.nome-sistema').forEach(el=> el.textContent = NOME);
 
 /* ---------- modal ---------- */
@@ -178,7 +182,8 @@ async function carregarMes(){
   S.fatImportado = fat.reduce((a,f)=> f.importado_em && (!a || f.importado_em > a) ? f.importado_em : a, null);
   S.fat = {}; S.fatLinhas = fat.length; const placas = new Set(S.veic.map(v=>v.placa)); S.fatFora = 0;
   S.fatDia = {}; S.cacheMes = {};
-  fat.forEach(f=>{ S.fat[f.placa] = (S.fat[f.placa]||0) + Number(f.valor||0); if(!placas.has(f.placa)) S.fatFora += Number(f.valor||0); if(f.emissao) S.fatDia[f.emissao] = (S.fatDia[f.emissao]||0) + Number(f.valor||0); });
+  S.foraPlacas = {};
+  fat.forEach(f=>{ S.fat[f.placa] = (S.fat[f.placa]||0) + Number(f.valor||0); if(!placas.has(f.placa)){ S.fatFora += Number(f.valor||0); S.foraPlacas[f.placa] = (S.foraPlacas[f.placa]||0) + Number(f.valor||0); } if(f.emissao) S.fatDia[f.emissao] = (S.fatDia[f.emissao]||0) + Number(f.valor||0); });
 }
 const reg = (placa, dia) => S.dias.get(placa+'|'+dia);
 const stDe = (placa, dia) => { const r = reg(placa, dia); return r && r.status ? S.status[r.status] : null; };
@@ -344,7 +349,7 @@ function renderApresentacao(){
       <div class="acts" style="margin-top:6px"><button class="btn gold" type="button" data-ir="painel">Ver o Painel →</button><button class="btn" type="button" data-ir="hoje">Tela Hoje</button><button class="btn" type="button" id="sb-tour">Ver o passo a passo</button></div></div>
 
     <div class="sb-sec"><h3>Como a torre foi montada aqui</h3><div class="sb-cards">
-      <div class="card sb-card"><div class="verbo">Lê</div><ul><li>A planilha "OUTUBRO - DISPONIBILIDADE" (11 abas): ${fN(nv)} conjuntos, ${ng} grids, 4 programadores, um status por dia.</li><li>O relatório de faturamento por CT-e que sai do sistema da transportadora (${fN(S.fatLinhas)} CT-e de outubro). O gestor importa o arquivo do jeito que ele vem, sem colar em aba nenhuma.</li><li>As metas por veículo de cada grid, da aba Gestão Frota, e as justificativas do Dashboard.</li></ul></div>
+      <div class="card sb-card"><div class="verbo">Lê</div><ul><li>A planilha do mês ("${esc(nomeMes(S.mes).toUpperCase())} - DISPONIBILIDADE", 11 abas), lida sozinha várias vezes por dia: ${fN(nv)} conjuntos, ${ng} grids, 4 programadores, um status por dia. O que alguém lança aqui vale mais que a planilha.</li><li>O faturamento por CT-e da aba Faturamento RAW (${fN(S.fatLinhas)} CT-e de ${esc(nomeMes(S.mes))}). O gestor também pode importar o relatório do jeito que sai do sistema.</li><li>As metas por veículo de cada grid, da aba Gestão Frota, e as justificativas do Dashboard.</li></ul></div>
       <div class="card sb-card"><div class="verbo">Junta</div><ul><li>Disponibilidade, faturamento e meta na mesma régua: cada placa mostra os dias parados e o quanto deixou de faturar.</li><li>As abas Resumo, Gestão Frota e Dashboard viram contas automáticas, com uma regra só.</li><li>Placas escritas de jeitos diferentes (".DTP5A91", "CTP-9F88") passam a ser uma placa só, sem a aba "Faturamento consolidado".</li><li>A justificativa de quem não bateu a meta já vem sugerida pelos dias lançados ("8 dias de manutenção corretiva, 5 de folga").</li></ul></div>
       <div class="card sb-card"><div class="verbo">Cria</div><ul><li>A tela Hoje: o programador vê só os caminhões dele e muda o status com um clique.</li><li>O aviso de conjunto sem lançamento e de manutenção que já passou de 3 dias.</li><li>O histórico de quem mudou o quê e quando, que a planilha não guarda.</li></ul></div>
     </div></div>
@@ -368,7 +373,7 @@ function renderApresentacao(){
     </div></div>
 
     <div class="sb-sec"><h3>Como funciona</h3><div class="sb-fluxo">
-      <div class="card"><b>1 · Origem</b><span class="sub">O programador lança o status do dia na tela Hoje. O faturamento vem do relatório de CT-e do sistema da transportadora (hoje carregado à mão; a leitura automática está em construção).</span></div>
+      <div class="card"><b>1 · Origem</b><span class="sub">O programador lança o status do dia na tela Hoje. Enquanto o time não migra de vez, a planilha do mês é lida sozinha e completa o que não foi lançado aqui. O faturamento vem da aba de CT-e da mesma planilha.</span></div>
       <div class="card"><b>2 · Organiza</b><span class="sub">Uma regra só no banco: rodando ou parado com cota conta como disponível; manutenção, motorista e SSMA contam como indisponível.</span></div>
       <div class="card"><b>3 · Mostra</b><span class="sub">Hoje, Quadro do mês e Faturamento × meta, com os mesmos números para todo mundo.</span></div>
       <div class="card"><b>4 · Age</b><span class="sub">Quem está sem lançamento, quem está parado há dias e quem está longe da meta aparecem primeiro.</span></div>
@@ -376,7 +381,8 @@ function renderApresentacao(){
 
     <div class="sb-sec"><h3>O que estamos construindo primeiro</h3><div class="sb-pri">
       <div class="card"><span>1</span><b>Disponibilidade diária no sistema</b><span class="tag green">tela pronta</span><span class="sub">Hoje e Quadro do mês, com histórico.</span></div>
-      <div class="card"><span>2</span><b>Faturamento × meta por grid e por placa</b><span class="tag green">tela pronta</span><span class="sub">Com o relatório de outubro.</span></div>
+      <div class="card"><span>2</span><b>Faturamento × meta por grid e por placa</b><span class="tag green">tela pronta</span><span class="sub">Lido da planilha do mês, com a meta proporcional.</span></div>
+      <div class="card"><span>·</span><b>Time lançando a disponibilidade direto aqui</b><span class="tag amber">piloto a partir de 16/11</span><span class="sub">Um programador primeiro; depois os quatro, e a planilha deixa de ser preenchida.</span></div>
       <div class="card"><span>3</span><b>Importar o relatório de faturamento do jeito que ele sai</b><span class="tag green">tela pronta</span><span class="sub">Botão em Faturamento × meta, só para o gestor.</span></div>
       <div class="card"><span>4</span><b>Ler o relatório de faturamento sozinho, todo dia</b><span class="tag amber">próximo passo</span><span class="sub">Precisa do acesso ao relatório no sistema.</span></div>
       <div class="card"><span>5</span><b>Programação de viagens (origem, destino, agendamento)</b><span class="tag">depois</span><span class="sub">As abas Programação e Noruega.</span></div>
@@ -464,6 +470,7 @@ function linhaHoje(x, dia){
   if(!st) sinal = '';   // o bloco "Sem lançamento" já diz isso; repetir em cada linha só polui
   else if((g==='manut' && n>3) || (g==='motorista' && r.status==='I|SEM MOTORISTA')) sinal = `<span class="sinal red">● ${n} dias ${g==='manut'?'em manutenção':'sem motorista'}</span>`;
   else if(n>1) sinal = `<span class="sub">há ${n} dias${n>=60?'+':''}</span>`;
+  if(noSistema(r) && liberado()) sinal += ` <span class="tag green${preLib()}" title="Lançado por ${esc(r.atualizado_por)} aqui no sistema${preLib()?' · 🔒 só o gestor vê até 16/11':''}">✓ lançado aqui</span>`;
   return `<div class="card cj">
     <div><button type="button" class="pl" data-ficha="${esc(x.placa)}" style="border:0;background:none;padding:0;cursor:pointer;color:inherit" title="Abrir a ficha do conjunto">${esc(x.placa)}</button> <span class="tag">${esc((S.grids[x.grid]||{}).nome||x.grid||'')}</span>
       <div class="linha2">${esc(x.motorista||'sem motorista na planilha')}</div><div class="linha2">${esc([x.carreta1,x.carreta2].filter(Boolean).join(' + '))} · ${esc(x.operacao||'')}${S.f.prog?'':' · '+esc(x.programador||'')}</div></div>
@@ -895,7 +902,10 @@ function renderFaturamento(){
         <td class="n">${l.gap>0?fR(l.gap):'–'}</td><td><span class="tag ${SIT[l.sit][1]}">${SIT[l.sit][0]}</span></td>
         <td data-just="${esc(l.x.placa)}" style="white-space:normal;min-width:220px;max-width:340px" title="Clique para escrever ou mudar">${S.just[l.x.placa]?`<span class="sub" style="color:var(--ink-2)">${esc(S.just[l.x.placa].texto.length>90?S.just[l.x.placa].texto.slice(0,90)+'…':S.just[l.x.placa].texto)}</span>`:l.sit!=='ok'?'<button class="btn sm" type="button">+ Justificar</button>':''}</td></tr>`).join('') || '<tr><td colspan="11" class="muted">Nenhuma placa com esses filtros.</td></tr>'}
     </tbody></table></div>
-    <p class="sub" style="margin:0">Fonte: relatório de faturamento por CT-e do sistema da transportadora, ${S.fatImportado?'importado em '+fDiaHora(S.fatImportado):'carregado da planilha em 27/10/2026 (a planilha perdeu a data de emissão dos CT-e, "########", então o faturamento conta no mês, não no dia)'}. As placas são padronizadas sozinhas (ponto, hífen e espaço saem), sem precisar de aba de correção.${S.fatFora?` ${fR(S.fatFora)} faturados em placa que não está na frota entram no total, mas não em nenhum grid.`:''}</p>`;
+    ${S.fatFora && liberado() ? `<div class="card aviso-fora${preLib()}" style="padding:12px 16px"><b>${fR(S.fatFora)} faturados em placa que não está na lista de conjuntos</b>${preLib()?' <span class="tag">🔒 só o gestor vê até 16/11</span>':''}
+      <div class="sub" style="margin-top:4px">Entram no total do mês, mas em nenhum grid. Uma planilha que soma só a lista de conjuntos (como a aba Gestão Frota) fica com esse valor a menos. Confira se é conjunto novo ou de fora da frota:</div>
+      <div style="display:flex;gap:6px;flex-wrap:wrap;margin-top:8px">${Object.entries(S.foraPlacas||{}).sort((a,b)=>b[1]-a[1]).map(([p,val])=>`<span class="tag"><b class="mono">${esc(p)}</b> · ${fR(val)}</span>`).join('')}</div></div>` : ''}
+    <p class="sub" style="margin:0">Fonte: ${S.fatImportado?'relatório de faturamento por CT-e importado em '+fDiaHora(S.fatImportado):`aba Faturamento RAW da planilha de ${esc(nomeMes(S.mes))}, lida sozinha. A planilha perdeu a data de emissão de parte dos CT-e ("########"): esses contam no mês, não no dia`}. As placas são padronizadas sozinhas (ponto, hífen e espaço saem), sem precisar de aba de correção.${S.fatFora && !liberado()?` ${fR(S.fatFora)} faturados em placa que não está na frota entram no total, mas não em nenhum grid.`:''}</p>`;
   $('#ff-mes', v).addEventListener('change', async e=>{ S.mes = e.target.value; lsSet('frt_mes', S.mes); await carregarMes(); renderFaturamento(); });
   const imp = $('#ff-imp', v); if(imp) imp.addEventListener('click', modalImportarFaturamento);
   $$('[data-just]', v).forEach(td=> td.addEventListener('click', e=>{ e.stopPropagation(); modalJustificativa(td.dataset.just); }));
@@ -1038,6 +1048,25 @@ function retornoTela(){
 }
 window.FR_retornoTela = retornoTela;
 
+/* ---------- PILOTO: quem já lança aqui e quem ainda lança na planilha ---------- */
+// Pedido do Luiz (11/11): o time do Marcos sai da planilha aos poucos. Por programador, nos últimos 7 dias até hoje,
+// quantos dias-conjunto foram lançados no sistema (atualizado_por com e-mail), quantos vieram da planilha e quantos faltam.
+const noSistema = r => !!(r && r.status && String(r.atualizado_por||'').includes('@'));
+function medidorPiloto(){
+  const hoje = hojeISO(), dias = []; for(let k=6; k>=0; k--){ const d = somaDias(hoje, -k); if(d.slice(0,7)===S.mes) dias.push(d); }
+  if(!dias.length) return '';
+  const linhas = S.progs.map(p=>{ const cs = S.veic.filter(v=> v.programador===p); let sis = 0, pla = 0, sem = 0; const quem = {};
+    cs.forEach(v=> dias.forEach(d=>{ const r = reg(v.placa, d); if(!r || !r.status) sem++; else if(noSistema(r)){ sis++; quem[r.atualizado_por] = 1; } else pla++; }));
+    const tot = cs.length*dias.length; return { p, n:cs.length, sis, pla, sem, tot, quem:Object.keys(quem) }; });
+  return `<div class="card${preLib()}" style="padding:14px 16px"><div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap"><b>Piloto: quem já lança aqui</b>${preLib()?'<span class="tag">🔒 só o gestor vê até 16/11</span>':''}<span class="sub">últimos ${dias.length} dias (${esc(fDia(dias[0]))} a hoje), em dias-conjunto</span></div>
+    <div class="tbl-wrap" style="margin-top:8px"><table class="tb"><thead><tr><th>Programador</th><th class="n">Conjuntos</th><th>No sistema</th><th class="n">Pela planilha</th><th class="n">Sem lançamento</th><th>Quem lançou aqui</th></tr></thead><tbody>
+    ${linhas.map(l=>`<tr style="cursor:default"><td><b>${esc(l.p.charAt(0)+l.p.slice(1).toLowerCase())}</b></td><td class="n">${l.n}</td>
+      <td><div style="display:flex;gap:6px;align-items:center"><div class="meter" style="width:110px"><i style="width:${l.tot?Math.round(l.sis/l.tot*100):0}%"></i></div><span class="mono">${fP(l.tot?l.sis/l.tot:0)}</span></div></td>
+      <td class="n">${fN(l.pla)}</td><td class="n">${l.sem?`<b style="color:var(--red)">${fN(l.sem)}</b>`:'0'}</td><td class="sub">${esc(l.quem.join(', ')||'–')}</td></tr>`).join('')}
+    </tbody></table></div>
+    <p class="sub" style="margin:8px 0 0">"No sistema" é o dia lançado na tela Hoje; ele vale mesmo que a planilha diga outra coisa. Quando um programador chegar perto de 100%, ele pode parar de preencher a planilha.</p></div>`;
+}
+
 /* ---------- EQUIPE ---------- */
 async function renderEquipe(){
   const v = $('#view-equipe');
@@ -1049,6 +1078,7 @@ async function renderEquipe(){
       <label class="fld"><span>Perfil</span><select id="m-papel"><option value="programador">Programador</option><option value="leitura">Leitura</option><option value="admin">Gestor</option></select></label>
       <label class="fld"><span>Caminhões de</span><select id="m-prog"><option value="">todos</option>${S.progs.map(p=>`<option>${esc(p)}</option>`).join('')}</select></label>
       <button class="btn pri" id="m-add" type="button">Incluir</button></div></div>
+    ${medidorPiloto()}
     <div class="card tbl-wrap"><table class="tb"><thead><tr><th>E-mail</th><th>Nome</th><th>Perfil</th><th>Caminhões de</th><th></th></tr></thead><tbody>
       ${(data||[]).map(m=>`<tr style="cursor:default"><td class="mono">${esc(m.email)}</td><td>${esc(m.nome||'')}</td><td>${esc(PAP[m.papel])}${m.ativo?'':' <span class="tag">inativo</span>'}</td><td>${esc(m.programador||'todos')}</td>
         <td>${m.primeiro_acesso_ate&&new Date(m.primeiro_acesso_ate)>new Date()?`<span class="tag amber">liberado até ${fDiaHora(m.primeiro_acesso_ate)}</span> `:''}<button class="btn sm" type="button" data-lib="${esc(m.email)}">Liberar primeiro acesso</button> ${m.email!==S.email?`<button class="btn sm" type="button" data-at="${esc(m.email)}" data-v="${m.ativo?'0':'1'}">${m.ativo?'Desativar':'Reativar'}</button>`:''}</td></tr>`).join('')}</tbody></table></div>`;
@@ -1099,8 +1129,18 @@ function tourPassos(){
   const perfil = pap==='admin' ? 'Seu acesso é de <b>Gestor</b>: você vê tudo, inclui pessoas na Equipe e importa o faturamento.'
     : pap==='programador' ? 'Seu acesso é de <b>Programador</b>: você lança o status do dia dos seus conjuntos.'
     : 'Seu acesso é de <b>Leitura</b>: você vê todas as telas com os dados reais, sem risco de mudar nada sem querer.';
+  // o programador só precisa da tela Hoje: um passo a passo curto, do lançamento do dia
+  if(pap==='programador') return [
+    { t:`Olá${nome ? ', '+esc(nome) : ''}! Boas-vindas à ${esc(NOME)}`, x:`Daqui em diante, o status do dia dos seus conjuntos é lançado aqui, no lugar da planilha. Leva poucos minutos por dia. Em 1 minuto eu mostro como.<br><br>${perfil}` },
+    { v:'hoje', alvo:()=> $('#view-hoje .tl-cards'), t:'Seus conjuntos de hoje', x:'A tela Hoje já abre só com os <b>seus</b> caminhões. Os números mostram quantos estão rodando, parados, em manutenção e <b>sem lançamento</b>. Clique num número para ver só aqueles.' },
+    { v:'hoje', alvo:()=> $('#h-repetir') || $('#view-hoje .tl-cards'), t:'Comece repetindo ontem', x:'O botão <b>Repetir ontem</b> copia o status de ontem em todos os que ainda não foram lançados hoje. Depois é só mudar os que mudaram.' },
+    { v:'hoje', alvo:()=> $('#view-hoje .st-btn'), t:'Um clique para mudar', x:'Clique no status de um conjunto, escolha o novo e salve. Dá para escrever uma observação e, em férias ou manutenção já marcada, <b>repetir até</b> uma data.' },
+    { v:'hoje', alvo:()=> $('#view-hoje .pl'), t:'A ficha do conjunto', x:'Clique na placa para ver o mês inteiro dele: dias disponíveis, parados e o histórico de quem mudou o quê.' },
+    { v:'hoje', alvo:()=> $('#f-prog') || $('#view-hoje .head'), t:'Cobrindo um colega?', x:'No filtro de programador, escolha <b>Todos os programadores</b> ou o nome do colega. A sua escolha fica lembrada.' },
+    { alvo:()=> $('#ac-btn'), t:'Dúvida ou ideia? 💬', x:'Este botão fica em todas as telas. Dá para escrever, <b>falar</b> ou mandar um print. A resposta volta para você aqui.' },
+    { t:'Pronto!', x:'Para rever este passo a passo, clique em <b>Passo a passo</b> no alto da tela.', fim:true } ];
   return [
-    { t:`Olá${nome ? ', '+esc(nome) : ''}! Bem-vindo à ${esc(NOME)}`, x:`Aqui está a disponibilidade da frota de outubro e o faturamento × meta, com os dados reais da planilha. Em 1 minuto eu mostro onde fica cada coisa.<br><br>${perfil}` },
+    { t:`Olá${nome ? ', '+esc(nome) : ''}! Boas-vindas à ${esc(NOME)}`, x:`Aqui está a disponibilidade da frota de ${esc(nomeMes(S.mes))} e o faturamento × meta, com os dados reais da planilha. Em 1 minuto eu mostro onde fica cada coisa.<br><br>${perfil}` },
     { v:'apresentacao', alvo:()=> $('.side'), t:'O menu', x:'Cada tela responde a uma pergunta. <b>Apresentação</b> explica o que é a torre e o que a planilha escondia. No celular, o menu fica no topo: arraste para o lado.' },
     { v:'painel', alvo:()=> $('#view-painel .pn-kpis'), t:'Painel: o Dashboard em gráficos', x:'Os números do mês num olhar: disponíveis, disponibilidade média, ritmo do faturamento, quanto falta para a meta e as placas críticas. <b>Clique num número</b> para abrir a tela com os detalhes.' },
     { v:'painel', alvo:()=> $('#view-painel .pn-grade'), t:'Os gráficos levam ao caso', x:'Disponibilidade dia a dia, como a frota passou cada dia, faturamento por grid e as placas onde mais falta. <b>Clique numa barra, num ponto ou numa placa</b> e o sistema mostra quem está por trás do número.' },
