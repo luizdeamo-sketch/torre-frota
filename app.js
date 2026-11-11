@@ -147,6 +147,8 @@ async function sessao(session){
   irPara(location.hash.replace('#','') || (visto ? lsGet('frt_view', data.papel==='programador' ? 'hoje' : 'painel') : 'apresentacao'));
   // primeira vez: o passo a passo no lugar da faixa de novidades (quem é novo não precisa saber o que mudou)
   if(!lsGet(tourChave(), '')){ novidadesCarregar().then(novMarcarVisto); setTimeout(()=> tourAbrir('primeira'), 600); }
+  // gestor do cliente, já liberado: a primeira vez abre o passo a passo de montar o time
+  else if(data.papel==='admin' && !ehDono() && liberado() && !lsGet(tourEquipeChave(), '')){ novidadesCarregar().then(novMarcarVisto); setTimeout(()=> tourAbrir('primeira', 'equipe'), 600); }
   else novidadesIniciar();
   retornoIniciar();
   window.dispatchEvent(new CustomEvent('frt-entrou'));
@@ -1093,12 +1095,14 @@ async function renderEquipe(){
       <div class="eq-conv"><input type="email" placeholder="E-mail de quem lança os caminhões de ${esc(nomeBonito(p))}" data-email-prog="${esc(p)}" aria-label="E-mail para convidar"><button class="btn${quem.length?'':' pri'}" type="button" data-convidar="${esc(p)}">Convidar</button></div></div>`; }).join('');
   const outros = ms.filter(m=> m.papel!=='programador');
   v.innerHTML = `<div class="head${preLib()}"><div><span class="eyebrow">Equipe${preLib()?' · 🔒 só você vê até 16/11; o Marcos vê a versão antiga até lá':''}</span><h2>Quem usa a torre</h2>
-      <p>Convide com o e-mail e mande a mensagem pronta pelo WhatsApp. A pessoa tem 48 horas para criar a senha. O programador entra direto na tela Hoje, só com os caminhões dele.</p></div></div>
+      <p>Convide com o e-mail e mande a mensagem pronta pelo WhatsApp. A pessoa tem 48 horas para criar a senha. O programador entra direto na tela Hoje, só com os caminhões dele.</p></div>
+      <div class="acts"><button class="btn" type="button" id="eq-tour">Passo a passo da Equipe</button></div></div>
     <div class="eq-grade${preLib()}">${progs}</div>
     <div class="card eq-card${preLib()}"><div class="eq-topo"><div><span class="eyebrow">Gestores e quem só acompanha</span><h3>Outras pessoas</h3><span class="sub">Gestor vê tudo e convida pessoas. "Só acompanha" vê as telas sem mudar nada.</span></div></div>
       ${outros.map(pessoa).join('') || '<p class="sub" style="margin:0">Ninguém além dos programadores.</p>'}
       <div class="eq-conv"><input type="email" id="eq-o-email" placeholder="E-mail" aria-label="E-mail"><input id="eq-o-nome" placeholder="Nome" aria-label="Nome">
         <select id="eq-o-papel" aria-label="Perfil"><option value="leitura">Só acompanha</option><option value="admin">Gestor</option></select><button class="btn" type="button" id="eq-o-add">Convidar</button></div></div>`;
+  $('#eq-tour', v).addEventListener('click', ()=> tourAbrir('botao', 'equipe'));
   const prazo = ()=> new Date(Date.now()+48*3600000).toISOString();
   const okEmail = e => /^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(e);
   async function gravar(row, aviso){
@@ -1171,7 +1175,8 @@ async function renderEquipeAntiga(){
 
 /* ---------- NOVIDADES ---------- */
 const novChave = ()=> 'frt_nov_visto:' + S.email;
-async function novidadesCarregar(){ const { data } = await sb.from('frt_novidades').select('*').order('data',{ascending:false}).order('criado_em',{ascending:false}).limit(8); S.novidades = data || []; return S.novidades; }
+// novidade com data futura fica guardada até o dia (versão de segunda)
+async function novidadesCarregar(){ const { data } = await sb.from('frt_novidades').select('*').lte('data', hojeISO()).order('data',{ascending:false}).order('criado_em',{ascending:false}).limit(8); S.novidades = data || []; return S.novidades; }
 function novMarcarVisto(){ if(S.novidades[0]) lsSet(novChave(), S.novidades[0].id); const f = $('#nov-faixa'); if(f) f.remove(); $('#btn-nov').classList.remove('novo'); }
 async function novidadesAbrir(){
   if(!S.novidades.length) await novidadesCarregar();
@@ -1229,9 +1234,24 @@ function tourPassos(){
     { v:'sugestoes', alvo:()=> $('#ac-btn'), t:'Dúvida ou ideia? 💬', x:'Este botão fica em todas as telas. Dá para escrever, <b>falar</b> ou mandar um print. A resposta volta para você aqui, na tela Sugestões.' },
     { t:'Pronto!', x:'Para rever este passo a passo, clique em <b>Passo a passo</b> no alto da tela.', fim:true } ];
 }
-function tourAbrir(origem){
+// Pedido do Luiz (11/11): o Marcos é gestor e monta o time sozinho. Passo a passo curto da Equipe, que abre sozinho
+// na primeira vez que um gestor (que não seja o Luiz) entra depois da liberação, e pelo botão na própria Equipe.
+const tourEquipeChave = ()=> 'frt_tour_equipe:' + S.email;
+function tourPassosEquipe(){
+  const nome = ((S.membro && S.membro.nome) || '').split(' ')[0];
+  const ult = sel => { const l = $$(sel); return l[l.length-1]; };
+  return [
+    { t:`${nome ? esc(nome)+', a' : 'A'}gora você monta o seu time`, x:'Você é <b>Gestor</b>: convida quem quiser, devolve a senha de quem esqueceu e tira o acesso de quem saiu, sem depender de ninguém. Em 1 minuto eu mostro como.' },
+    { v:'equipe', alvo:()=> $('#view-equipe .eq-card'), t:'Um cartão por programador', x:'Cada programador do cadastro tem um cartão: quantos conjuntos ele tem, quem lança os caminhões dele e quanto <b>já é lançado aqui</b> nos últimos 7 dias (o resto ainda vem da planilha).' },
+    { v:'equipe', alvo:()=> $('#view-equipe [data-email-prog]') && $('#view-equipe [data-email-prog]').closest('.eq-conv'), t:'Para convidar, só o e-mail', x:'Digite o e-mail da pessoa e clique em <b>Convidar</b>. Abre a mensagem pronta, com o link e o passo a passo: é só clicar em <b>Mandar no WhatsApp</b> ou copiar. A pessoa tem 48 horas para criar a senha.' },
+    { v:'equipe', alvo:()=> $('#view-equipe .eq-pessoa') || $('#view-equipe .eq-card'), t:'Acompanhe cada pessoa', x:'Embaixo do nome aparece a situação: <b>convite aberto</b>, <b>prazo venceu</b> ou quando <b>entrou pela última vez</b>. Ao lado, o botão do próximo passo: Renovar 48 h, <b>Esqueceu a senha</b> ou Tirar acesso.' },
+    { v:'equipe', alvo:()=> ult('#view-equipe .eq-card'), t:'Outros gestores ou quem só acompanha', x:'No último cartão você convida quem não é programador: outro <b>Gestor</b> (vê tudo e convida pessoas) ou alguém que <b>só acompanha</b> (vê as telas sem mudar nada).' },
+    { v:'hoje', alvo:()=> $('#view-hoje .tl-cards'), t:'Depois, o time lança aqui', x:'Cada programador abre a tela <b>Hoje</b> já com os caminhões dele e lança o dia com um clique. Nesta primeira semana a planilha continua sendo lida, para cobrir quem esquecer. O que for lançado aqui vale mais que a planilha.' },
+    { t:'Pronto!', x:'Para rever, clique em <b>Passo a passo da Equipe</b> no alto da tela Equipe. Dúvida? Use o balão 💬.', fim:true } ];
+}
+function tourAbrir(origem, tipo){
   tourFechar(true);
-  T.passos = tourPassos(); T.i = 0; T.origem = origem || 'botao'; window.FR_tour = true;
+  T.tipo = tipo || ''; T.passos = T.tipo==='equipe' ? tourPassosEquipe() : tourPassos(); T.i = 0; T.origem = origem || 'botao'; window.FR_tour = true;
   const sp = document.createElement('div'); sp.id = 'tour-luz'; sp.setAttribute('aria-hidden','true');
   const cx = document.createElement('div'); cx.id = 'tour-caixa'; cx.setAttribute('role','dialog'); cx.setAttribute('aria-modal','true'); cx.setAttribute('aria-labelledby','tour-t');
   document.body.append(sp, cx);
@@ -1288,7 +1308,7 @@ function tourPosicionar(){
 }
 function tourFechar(silencio){
   const cx = $('#tour-caixa'); if(!cx) return;
-  if(!silencio){ lsSet(tourChave(), new Date().toISOString()); window.FR_uso && window.FR_uso('tour', 'fechou', { passo:T.i, de:T.passos.length }); }
+  if(!silencio){ lsSet(T.tipo==='equipe' ? tourEquipeChave() : tourChave(), new Date().toISOString()); window.FR_uso && window.FR_uso('tour', 'fechou', { passo:T.i, de:T.passos.length, tipo:T.tipo||'geral' }); }
   cx.remove(); const sp = $('#tour-luz'); if(sp) sp.remove(); T.alvo = null; window.FR_tour = false;
   window.removeEventListener('resize', tourPosicionar); window.removeEventListener('scroll', tourPosicionar, true);
   document.removeEventListener('keydown', tourTecla);
