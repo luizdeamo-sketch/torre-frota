@@ -60,9 +60,12 @@ const toast = m => window.showToast(m);
 const ehAdmin = ()=> S.membro && S.membro.papel==='admin';
 const podeEscrever = ()=> S.membro && (S.membro.papel==='admin' || S.membro.papel==='programador');
 function guard(){ if(!podeEscrever()){ toast('Somente leitura: peça ao gestor para liberar a edição.'); return false; } return true; }
-// versão nova sai às segundas (regra da casa): o que fica pronto antes aparece só para o gestor, com borda roxa e 🔒
+// versão nova sai às segundas (regra da casa): o que fica pronto antes aparece só para o Luiz, com borda roxa e 🔒
+// (o Marcos também é gestor desde 11/11, então a trava olha o e-mail do responsável, não o perfil)
 const LIBERA = '2026-11-16';
-const liberado = ()=> ehAdmin() || hojeISO() >= LIBERA;
+const DONOS = ['luizdeamo@gmail.com', 'luiz.amo@capacitycase.com.br'];
+const ehDono = ()=> DONOS.includes(S.email);
+const liberado = ()=> ehDono() || hojeISO() >= LIBERA;
 const preLib = ()=> hojeISO() < LIBERA ? ' pre-lib' : '';
 $$('.nome-sistema').forEach(el=> el.textContent = NOME);
 
@@ -105,7 +108,7 @@ async function entrar(){
   b.disabled = false;
   if(error){ m.hidden = false; m.className='msg'; m.textContent = 'E-mail ou senha não conferem.'; }
 }
-const PA_MSG = { email_invalido:'E-mail inválido.', senha_curta:'A senha precisa ter pelo menos 10 caracteres.', nao_liberado:'Este e-mail ainda não foi liberado pelo gestor (ou o prazo de 48h venceu).', ja_tem_senha:'Este e-mail já tem senha. Use "Entrar".', erro:'Não deu certo agora. Tente de novo em instantes.' };
+const PA_MSG = { email_invalido:'E-mail inválido.', senha_curta:'A senha precisa ter pelo menos 10 caracteres.', nao_liberado:'Este e-mail ainda não foi liberado pelo gestor (ou o prazo de 48h venceu).', ja_tem_senha:'Este e-mail já tem senha. Use "Entrar". Se esqueceu, peça ao gestor para liberar uma nova senha.', erro:'Não deu certo agora. Tente de novo em instantes.' };
 $('#lg-primeiro').addEventListener('click', ()=>{ $('#lg-entrar').hidden = true; $('#lg-pa').hidden = false; $('#pa-email').value = $('#lg-email').value; $('#pa-msg').hidden = true; });
 $('#pa-voltar').addEventListener('click', ()=>{ $('#lg-pa').hidden = true; $('#lg-entrar').hidden = false; });
 $('#pa-btn').addEventListener('click', async ()=>{
@@ -1048,27 +1051,100 @@ function retornoTela(){
 }
 window.FR_retornoTela = retornoTela;
 
-/* ---------- PILOTO: quem já lança aqui e quem ainda lança na planilha ---------- */
-// Pedido do Luiz (11/11): o time do Marcos sai da planilha aos poucos. Por programador, nos últimos 7 dias até hoje,
-// quantos dias-conjunto foram lançados no sistema (atualizado_por com e-mail), quantos vieram da planilha e quantos faltam.
+/* ---------- PILOTO: dia lançado aqui no sistema (atualizado_por com e-mail) ou vindo da planilha ---------- */
 const noSistema = r => !!(r && r.status && String(r.atualizado_por||'').includes('@'));
-function medidorPiloto(){
-  const hoje = hojeISO(), dias = []; for(let k=6; k>=0; k--){ const d = somaDias(hoje, -k); if(d.slice(0,7)===S.mes) dias.push(d); }
-  if(!dias.length) return '';
-  const linhas = S.progs.map(p=>{ const cs = S.veic.filter(v=> v.programador===p); let sis = 0, pla = 0, sem = 0; const quem = {};
-    cs.forEach(v=> dias.forEach(d=>{ const r = reg(v.placa, d); if(!r || !r.status) sem++; else if(noSistema(r)){ sis++; quem[r.atualizado_por] = 1; } else pla++; }));
-    const tot = cs.length*dias.length; return { p, n:cs.length, sis, pla, sem, tot, quem:Object.keys(quem) }; });
-  return `<div class="card${preLib()}" style="padding:14px 16px"><div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap"><b>Piloto: quem já lança aqui</b>${preLib()?'<span class="tag">🔒 só o gestor vê até 16/11</span>':''}<span class="sub">últimos ${dias.length} dias (${esc(fDia(dias[0]))} a hoje), em dias-conjunto</span></div>
-    <div class="tbl-wrap" style="margin-top:8px"><table class="tb"><thead><tr><th>Programador</th><th class="n">Conjuntos</th><th>No sistema</th><th class="n">Pela planilha</th><th class="n">Sem lançamento</th><th>Quem lançou aqui</th></tr></thead><tbody>
-    ${linhas.map(l=>`<tr style="cursor:default"><td><b>${esc(l.p.charAt(0)+l.p.slice(1).toLowerCase())}</b></td><td class="n">${l.n}</td>
-      <td><div style="display:flex;gap:6px;align-items:center"><div class="meter" style="width:110px"><i style="width:${l.tot?Math.round(l.sis/l.tot*100):0}%"></i></div><span class="mono">${fP(l.tot?l.sis/l.tot:0)}</span></div></td>
-      <td class="n">${fN(l.pla)}</td><td class="n">${l.sem?`<b style="color:var(--red)">${fN(l.sem)}</b>`:'0'}</td><td class="sub">${esc(l.quem.join(', ')||'–')}</td></tr>`).join('')}
-    </tbody></table></div>
-    <p class="sub" style="margin:8px 0 0">"No sistema" é o dia lançado na tela Hoje; ele vale mesmo que a planilha diga outra coisa. Quando um programador chegar perto de 100%, ele pode parar de preencher a planilha.</p></div>`;
+
+/* ---------- EQUIPE (nova, 11/11): o Marcos administra o próprio time ---------- */
+// Pedido do Luiz (11/11): o Marcos vira gestor e inclui quem quiser, "de um jeito simples". Um cartão por programador
+// do cadastro: quem lança os caminhões dele, se já entrou, quanto já lança aqui, e o próximo passo com um botão
+// (convidar só com o e-mail, mensagem pronta para o WhatsApp, renovar prazo, nova senha, tirar acesso).
+const URL_SISTEMA = 'https://luizdeamo-sketch.github.io/torre-frota/';
+const nomeBonito = p => String(p||'').charAt(0) + String(p||'').slice(1).toLowerCase();
+function msgConvite(m, nova){
+  const nome = (m.nome || '').split(' ')[0];
+  return `Oi${nome ? ', '+nome : ''}! ${nova ? 'Liberei uma nova senha para você' : (m.papel==='programador' ? 'A disponibilidade dos seus caminhões agora é lançada' : 'Liberei o seu acesso')} na ${NOME}.\n\n`
+    + `1. Abra ${URL_SISTEMA}\n2. Clique em "Primeiro acesso ou nova senha"\n3. Use o e-mail ${m.email} e crie uma senha com pelo menos 10 caracteres\n\n`
+    + `Vale até ${fDiaHora(m.primeiro_acesso_ate)}.${m.papel==='programador' && !nova ? ' Depois é só abrir a tela Hoje todo dia e lançar o status dos seus conjuntos.' : ''}`;
+}
+async function renderEquipe(){
+  if(!liberado()) return renderEquipeAntiga();
+  const v = $('#view-equipe');
+  const [{ data: membros }, { data: acessos }] = await Promise.all([ sb.from('frt_membros').select('*').order('criado_em'), sb.rpc('frt_acessos') ]);
+  const ult = {}; (acessos||[]).forEach(a=> ult[a.email] = a.ultimo);
+  const ms = (membros||[]).filter(m=> !DONOS.includes(m.email) || ehDono());
+  const agora = new Date();
+  // situação de cada pessoa, em palavras de gente
+  const sit = m => !m.ativo ? ['sem acesso', 'gray'] : m.primeiro_acesso_ate && new Date(m.primeiro_acesso_ate) > agora ? ['convite aberto: falta criar a senha', 'amber']
+    : ult[m.email] ? ['entrou pela última vez '+fDiaHora(ult[m.email]), 'green'] : m.primeiro_acesso_ate ? ['o prazo do convite venceu', 'red'] : ['ainda não entrou', 'amber'];
+  const pilotoDe = p => { const hoje = hojeISO(), dias = []; for(let k=6; k>=0; k--){ const d = somaDias(hoje, -k); if(d.slice(0,7)===S.mes) dias.push(d); }
+    const cs = S.veic.filter(x=> x.programador===p); let sis = 0, tot = 0; cs.forEach(x=> dias.forEach(d=>{ tot++; if(noSistema(reg(x.placa, d))) sis++; })); return { n:cs.length, pct: tot ? sis/tot : 0 }; };
+  const pessoa = m => { const [txt, cor] = sit(m); const aberto = m.ativo && m.primeiro_acesso_ate && new Date(m.primeiro_acesso_ate) > agora, dono = DONOS.includes(m.email), eu = m.email===S.email;
+    return `<div class="eq-pessoa"><div><b>${esc(m.nome || m.email)}</b><div class="sub mono">${esc(m.email)}</div><span class="tag ${cor}">${esc(txt)}</span></div>
+      <div class="eq-acts">${aberto ? `<button class="btn sm pri" type="button" data-copiar="${esc(m.email)}">Copiar mensagem</button><a class="btn sm" target="_blank" rel="noopener noreferrer" href="https://wa.me/?text=${encodeURIComponent(msgConvite(m, !!ult[m.email]))}">WhatsApp</a>` : ''}
+        ${dono || eu ? '' : !m.ativo ? `<button class="btn sm" type="button" data-renovar="${esc(m.email)}">Devolver o acesso</button>`
+          : aberto ? `<button class="btn sm" type="button" data-renovar="${esc(m.email)}">Renovar 48 h</button>`
+          : ult[m.email] ? `<button class="btn sm" type="button" data-renovar="${esc(m.email)}" data-nova="1" title="A pessoa esqueceu a senha: libera 48 horas para ela criar outra">Esqueceu a senha</button>`
+          : `<button class="btn sm" type="button" data-renovar="${esc(m.email)}">Renovar convite</button>`}
+        ${dono || eu || !m.ativo ? '' : `<button class="btn sm" type="button" data-tirar="${esc(m.email)}">Tirar acesso</button>`}</div></div>`; };
+  const progs = S.progs.map(p=>{ const quem = ms.filter(m=> m.papel==='programador' && m.programador===p), pl = pilotoDe(p);
+    return `<div class="card eq-card"><div class="eq-topo"><div><span class="eyebrow">Programador</span><h3>${esc(nomeBonito(p))}</h3><span class="sub">${pl.n} conjuntos</span></div>
+        <div class="eq-pct" title="Dias-conjunto dos últimos 7 dias lançados aqui no sistema (o resto veio da planilha ou está sem lançamento)"><b>${fP(pl.pct)}</b><span class="sub">lançado aqui<br>últimos 7 dias</span></div></div>
+      ${quem.length ? quem.map(pessoa).join('') : `<p class="sub" style="margin:0">Ninguém lança os caminhões de ${esc(nomeBonito(p))} aqui ainda.</p>`}
+      <div class="eq-conv"><input type="email" placeholder="E-mail de quem lança os caminhões de ${esc(nomeBonito(p))}" data-email-prog="${esc(p)}" aria-label="E-mail para convidar"><button class="btn${quem.length?'':' pri'}" type="button" data-convidar="${esc(p)}">Convidar</button></div></div>`; }).join('');
+  const outros = ms.filter(m=> m.papel!=='programador');
+  v.innerHTML = `<div class="head${preLib()}"><div><span class="eyebrow">Equipe${preLib()?' · 🔒 só você vê até 16/11; o Marcos vê a versão antiga até lá':''}</span><h2>Quem usa a torre</h2>
+      <p>Convide com o e-mail e mande a mensagem pronta pelo WhatsApp. A pessoa tem 48 horas para criar a senha. O programador entra direto na tela Hoje, só com os caminhões dele.</p></div></div>
+    <div class="eq-grade${preLib()}">${progs}</div>
+    <div class="card eq-card${preLib()}"><div class="eq-topo"><div><span class="eyebrow">Gestores e quem só acompanha</span><h3>Outras pessoas</h3><span class="sub">Gestor vê tudo e convida pessoas. "Só acompanha" vê as telas sem mudar nada.</span></div></div>
+      ${outros.map(pessoa).join('') || '<p class="sub" style="margin:0">Ninguém além dos programadores.</p>'}
+      <div class="eq-conv"><input type="email" id="eq-o-email" placeholder="E-mail" aria-label="E-mail"><input id="eq-o-nome" placeholder="Nome" aria-label="Nome">
+        <select id="eq-o-papel" aria-label="Perfil"><option value="leitura">Só acompanha</option><option value="admin">Gestor</option></select><button class="btn" type="button" id="eq-o-add">Convidar</button></div></div>`;
+  const prazo = ()=> new Date(Date.now()+48*3600000).toISOString();
+  const okEmail = e => /^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(e);
+  async function gravar(row, aviso){
+    const { error } = await sb.from('frt_membros').upsert(Object.assign({ ativo:true, primeiro_acesso_ate:prazo() }, row), { onConflict:'email' });
+    if(error){ toast('Não salvou: '+error.message); return; }
+    toast(aviso); await renderEquipe();
+    const m = (await sb.from('frt_membros').select('*').eq('email', row.email).maybeSingle()).data;
+    if(m) mostrarConvite(m, !!ult[m.email]);
+  }
+  $$('[data-convidar]', v).forEach(b=> b.addEventListener('click', ()=>{
+    const p = b.dataset.convidar, inp = $(`[data-email-prog="${p}"]`, v), email = inp.value.trim().toLowerCase();
+    if(!okEmail(email)){ toast('Digite um e-mail válido.'); inp.focus(); return; }
+    if(DONOS.includes(email)){ toast('Esse acesso é do responsável pelo sistema.'); return; }
+    const ja = ms.find(m=> m.email===email);
+    gravar({ email, nome: (ja && ja.nome) || nomeBonito(p), papel:'programador', programador:p }, 'Convite criado. Mande a mensagem para a pessoa.');
+  }));
+  $('#eq-o-add', v).addEventListener('click', ()=>{
+    const email = $('#eq-o-email', v).value.trim().toLowerCase();
+    if(!okEmail(email)){ toast('Digite um e-mail válido.'); return; }
+    if(DONOS.includes(email)){ toast('Esse acesso é do responsável pelo sistema.'); return; }
+    gravar({ email, nome: $('#eq-o-nome', v).value.trim() || null, papel: $('#eq-o-papel', v).value, programador:null }, 'Convite criado. Mande a mensagem para a pessoa.');
+  });
+  $$('[data-renovar]', v).forEach(b=> b.addEventListener('click', ()=>{ const m = ms.find(x=> x.email===b.dataset.renovar);
+    gravar({ email:m.email }, b.dataset.nova ? 'Nova senha liberada por 48 horas. Mande a mensagem para a pessoa.' : 'Prazo renovado por 48 horas.'); }));
+  $$('[data-tirar]', v).forEach(b=> b.addEventListener('click', async ()=>{
+    if(!b.dataset.ok){ b.dataset.ok = '1'; b.textContent = 'Confirmar: tirar?'; return; }
+    const { error } = await sb.from('frt_membros').update({ ativo:false, primeiro_acesso_ate:null }).eq('email', b.dataset.tirar);
+    if(error){ toast('Não salvou: '+error.message); return; } toast('Acesso retirado. O histórico do que a pessoa lançou continua.'); renderEquipe(); }));
+  $$('[data-copiar]', v).forEach(b=> b.addEventListener('click', ()=>{ const m = ms.find(x=> x.email===b.dataset.copiar); copiar(msgConvite(m, !!ult[m.email])); }));
+}
+function copiar(txt){
+  const ok = ()=> toast('Mensagem copiada. Cole no WhatsApp ou no e-mail da pessoa.');
+  if(navigator.clipboard && window.isSecureContext) navigator.clipboard.writeText(txt).then(ok, ()=> mostrarTexto(txt)); else mostrarTexto(txt);
+}
+function mostrarTexto(txt){ abrirModal(`<div class="modal-h"><h3>Copie a mensagem</h3><button class="x" data-close aria-label="Fechar">✕</button></div><div class="modal-b"><textarea style="width:100%;min-height:200px" readonly>${esc(txt)}</textarea></div>`, bg=>{ const t = $('textarea', bg); t.focus(); t.select(); }); }
+// logo depois de convidar: a mensagem na tela, com os dois botões
+function mostrarConvite(m, nova){
+  const txt = msgConvite(m, nova);
+  abrirModal(`<div class="modal-h"><div><h3>${nova ? 'Nova senha liberada' : 'Convite pronto'}</h3><div class="sub">Mande esta mensagem para ${esc(m.nome || m.email)}. O prazo é de 48 horas.</div></div><button class="x" data-close aria-label="Fechar">✕</button></div>
+    <div class="modal-b"><div class="card" style="padding:12px 14px;white-space:pre-wrap;font-size:14px">${esc(txt)}</div></div>
+    <div class="modal-f"><button class="btn" type="button" data-close>Fechar</button><button class="btn" type="button" id="cv-copiar">Copiar</button><a class="btn pri" target="_blank" rel="noopener noreferrer" href="https://wa.me/?text=${encodeURIComponent(txt)}">Mandar no WhatsApp</a></div>`, bg=>{
+    $('#cv-copiar', bg).addEventListener('click', ()=> copiar(txt)); });
 }
 
-/* ---------- EQUIPE ---------- */
-async function renderEquipe(){
+/* ---------- EQUIPE (antiga, vale para o Marcos até a versão de segunda) ---------- */
+async function renderEquipeAntiga(){
   const v = $('#view-equipe');
   const { data } = await sb.from('frt_membros').select('*').order('criado_em');
   const PAP = { admin:'Gestor', programador:'Programador', leitura:'Leitura' };
@@ -1078,10 +1154,9 @@ async function renderEquipe(){
       <label class="fld"><span>Perfil</span><select id="m-papel"><option value="programador">Programador</option><option value="leitura">Leitura</option><option value="admin">Gestor</option></select></label>
       <label class="fld"><span>Caminhões de</span><select id="m-prog"><option value="">todos</option>${S.progs.map(p=>`<option>${esc(p)}</option>`).join('')}</select></label>
       <button class="btn pri" id="m-add" type="button">Incluir</button></div></div>
-    ${medidorPiloto()}
     <div class="card tbl-wrap"><table class="tb"><thead><tr><th>E-mail</th><th>Nome</th><th>Perfil</th><th>Caminhões de</th><th></th></tr></thead><tbody>
       ${(data||[]).map(m=>`<tr style="cursor:default"><td class="mono">${esc(m.email)}</td><td>${esc(m.nome||'')}</td><td>${esc(PAP[m.papel])}${m.ativo?'':' <span class="tag">inativo</span>'}</td><td>${esc(m.programador||'todos')}</td>
-        <td>${m.primeiro_acesso_ate&&new Date(m.primeiro_acesso_ate)>new Date()?`<span class="tag amber">liberado até ${fDiaHora(m.primeiro_acesso_ate)}</span> `:''}<button class="btn sm" type="button" data-lib="${esc(m.email)}">Liberar primeiro acesso</button> ${m.email!==S.email?`<button class="btn sm" type="button" data-at="${esc(m.email)}" data-v="${m.ativo?'0':'1'}">${m.ativo?'Desativar':'Reativar'}</button>`:''}</td></tr>`).join('')}</tbody></table></div>`;
+        <td>${m.primeiro_acesso_ate&&new Date(m.primeiro_acesso_ate)>new Date()?`<span class="tag amber">liberado até ${fDiaHora(m.primeiro_acesso_ate)}</span> `:''}${DONOS.includes(m.email) && !ehDono() ? '' : `<button class="btn sm" type="button" data-lib="${esc(m.email)}">Liberar primeiro acesso</button>`} ${m.email!==S.email && (!DONOS.includes(m.email) || ehDono())?`<button class="btn sm" type="button" data-at="${esc(m.email)}" data-v="${m.ativo?'0':'1'}">${m.ativo?'Desativar':'Reativar'}</button>`:''}</td></tr>`).join('')}</tbody></table></div>`;
   $('#m-add').addEventListener('click', async ()=>{
     const email = $('#m-email').value.trim().toLowerCase(); if(!/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(email)){ toast('Não é um e-mail válido.'); return; }
     const { error } = await sb.from('frt_membros').upsert({ email, nome:$('#m-nome').value.trim()||null, papel:$('#m-papel').value, programador:$('#m-prog').value||null, ativo:true, primeiro_acesso_ate:new Date(Date.now()+48*3600000).toISOString() }, { onConflict:'email' });
