@@ -128,11 +128,13 @@ $('#btn-sair').addEventListener('click', async ()=>{ await sb.auth.signOut({ sco
 let iniciado = false;
 sb.auth.onAuthStateChange((ev, session)=>{ setTimeout(()=> sessao(session), 0); });
 async function sessao(session){
-  if(!session){ S.membro = null; S.email=''; iniciado = false; telaLogin(); return; }
-  if(iniciado && S.email === session.user.email.toLowerCase()) return;
-  S.email = session.user.email.toLowerCase();
+  if(!session){ S.membro = null; S.email=''; iniciado = false; S.entrando = ''; telaLogin(); return; }
+  // o login dispara dois eventos quase juntos; sem esta trava a torre carregava tudo duas vezes e abria o passo a passo duas vezes (16/11)
+  const email = session.user.email.toLowerCase();
+  if((iniciado || S.entrando===email) && S.email === email) return;
+  S.email = email; S.entrando = email;
   const { data } = await sb.from('frt_membros').select('*').ilike('email', S.email).maybeSingle();
-  if(!data || !data.ativo){ await sb.auth.signOut({ scope:'local' }); telaLogin('Este e-mail não tem acesso a esta torre. Fale com o gestor.'); return; }
+  if(!data || !data.ativo){ S.entrando = ''; await sb.auth.signOut({ scope:'local' }); telaLogin('Este e-mail não tem acesso a esta torre. Fale com o gestor.'); return; }
   S.membro = data; iniciado = true;
   $('#login').hidden = true; $('#app').hidden = false;
   const PAP = { admin:'Gestor', programador:'Programador', leitura:'Leitura' };
@@ -150,6 +152,7 @@ async function sessao(session){
   // gestor do cliente, já liberado: a primeira vez abre o passo a passo de montar o time
   else if(data.papel==='admin' && !ehDono() && liberado() && !lsGet(tourEquipeChave(), '')){ novidadesCarregar().then(novMarcarVisto); setTimeout(()=> tourAbrir('primeira', 'equipe'), 600); }
   else novidadesIniciar();
+  S.entrando = '';
   retornoIniciar();
   window.dispatchEvent(new CustomEvent('frt-entrou'));
 }
