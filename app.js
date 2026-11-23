@@ -973,7 +973,8 @@ function modalImportarFaturamento(){
         const ix = k => linhas.cab.indexOf(k), pega = (l,k) => ix(k)>=0 ? l[ix(k)] : null;
         const G = { japao:'JAPAO', grecia:'GRECIA', inglaterra:'INGLATERRA', noruega:'NORUEGA' };
         const placas = new Set(S.veic.map(x=>x.placa)); const meses = {}; let fora = 0;
-        prontos = linhas.dados.filter(l=> l && (pega(l,'placa') || numBR(pega(l,'faturamento')))).map((l,k)=>{
+        // só linha com placa é CT-e: a linha de total no fim do relatório não tem placa e dobrava o mês (23/11)
+        prontos = linhas.dados.filter(l=> l && /^[A-Z]{3}\d[A-Z0-9]\d{2}$/.test(placaP(pega(l,'placa'))||'')).map((l,k)=>{
           const em = dataBR(pega(l,'data emissao')); if(em) meses[em.slice(0,7)] = (meses[em.slice(0,7)]||0)+1;
           const p = placaP(pega(l,'placa')); if(!placas.has(p)) fora++;
           const idg = numBR(pega(l,'id gerencial'));
