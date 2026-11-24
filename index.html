@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
-<meta name="app-build" content="202611241111">
+<meta name="app-build" content="202611241121">
 <title>Torre de Controle - Transpanorama</title>
 <link rel="icon" href="favicon.png" type="image/png">
 <link rel="preconnect" href="https://fonts.googleapis.com">
@@ -424,8 +424,9 @@ a.btn{text-decoration:none}
       <button type="button" class="btn" id="lg-primeiro" style="justify-content:center">Primeiro acesso ou nova senha</button>
     </div>
     <div id="lg-pa" style="display:grid;gap:12px" hidden>
-      <div><h2 style="margin:0;font-size:20px">Primeiro acesso ou nova senha</h2><p class="muted" style="margin:2px 0 0">Use o e-mail que o gestor liberou e escolha uma senha com pelo menos 10 caracteres. Vale por 48 horas depois que o gestor libera.</p></div>
+      <div><h2 style="margin:0;font-size:20px">Primeiro acesso ou nova senha</h2><p class="muted" style="margin:2px 0 0">Use o e-mail e o código que vieram na mensagem do convite, e escolha uma senha com pelo menos 10 caracteres. Vale por 48 horas.</p></div>
       <label class="fld"><span>E-mail</span><input id="pa-email" type="email" autocomplete="username"></label>
+      <label class="fld"><span>Código do convite</span><input id="pa-codigo" autocomplete="one-time-code" placeholder="Ex.: 7F3A-9C21" style="text-transform:uppercase;letter-spacing:.08em"></label>
       <label class="fld"><span>Nova senha</span><input id="pa-senha" type="password" autocomplete="new-password"></label>
       <div id="pa-msg" class="msg" hidden></div>
       <button type="button" class="btn pri" id="pa-btn" style="justify-content:center">Criar senha e entrar</button>
@@ -473,7 +474,7 @@ a.btn{text-decoration:none}
 <div id="modal-root"></div>
 
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.45.4/dist/umd/supabase.min.js"></script>
-<script src="app.js?v=202611241111"></script>
-<script src="acompanhante.js?v=202611241111"></script>
+<script src="app.js?v=202611241121"></script>
+<script src="acompanhante.js?v=202611241121"></script>
 </body>
 </html>

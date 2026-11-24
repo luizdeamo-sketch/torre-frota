@@ -114,14 +114,14 @@ async function entrar(){
   b.disabled = false;
   if(error){ m.hidden = false; m.className='msg'; m.textContent = 'E-mail ou senha não conferem.'; }
 }
-const PA_MSG = { email_invalido:'E-mail inválido.', senha_curta:'A senha precisa ter pelo menos 10 caracteres.', nao_liberado:'Este e-mail ainda não foi liberado pelo gestor (ou o prazo de 48h venceu).', ja_tem_senha:'Este e-mail já tem senha. Use "Entrar". Se esqueceu, peça ao gestor para liberar uma nova senha.', erro:'Não deu certo agora. Tente de novo em instantes.' };
+const PA_MSG = { email_invalido:'E-mail inválido.', senha_curta:'A senha precisa ter pelo menos 10 caracteres.', nao_liberado:'Este e-mail ainda não foi liberado pelo gestor (ou o prazo de 48h venceu).', ja_tem_senha:'Este e-mail já tem senha. Use "Entrar". Se esqueceu, peça ao gestor para liberar uma nova senha.', codigo_invalido:'O código do convite não confere. Use o código da última mensagem do gestor (se ele liberou de novo, o código mudou).', erro:'Não deu certo agora. Tente de novo em instantes.' };
 $('#lg-primeiro').addEventListener('click', ()=>{ $('#lg-entrar').hidden = true; $('#lg-pa').hidden = false; $('#pa-email').value = $('#lg-email').value; $('#pa-msg').hidden = true; });
 $('#pa-voltar').addEventListener('click', ()=>{ $('#lg-pa').hidden = true; $('#lg-entrar').hidden = false; });
 $('#pa-btn').addEventListener('click', async ()=>{
-  const email = $('#pa-email').value.trim(), senha = $('#pa-senha').value, m = $('#pa-msg'), b = $('#pa-btn');
+  const email = $('#pa-email').value.trim().toLowerCase(), senha = $('#pa-senha').value, codigo = $('#pa-codigo').value.trim(), m = $('#pa-msg'), b = $('#pa-btn');
   b.disabled = true; m.hidden = true;
   try{
-    const r = await fetch(CONFIG.url + '/functions/v1/frt-primeiro-acesso', { method:'POST', headers:{ 'Content-Type':'application/json', apikey: CONFIG.anon }, body: JSON.stringify({ email, senha }) });
+    const r = await fetch(CONFIG.url + '/functions/v1/frt-primeiro-acesso', { method:'POST', headers:{ 'Content-Type':'application/json', apikey: CONFIG.anon }, body: JSON.stringify({ email, senha, codigo }) });
     const j = await r.json().catch(()=>({ code:'erro' }));
     if(!r.ok || !j.ok){ m.hidden = false; m.className='msg'; m.textContent = PA_MSG[j.code] || PA_MSG.erro; b.disabled = false; return; }
     const { error } = await sb.auth.signInWithPassword({ email, password: senha });
@@ -139,7 +139,7 @@ async function sessao(session){
   const email = session.user.email.toLowerCase();
   if((iniciado || S.entrando===email) && S.email === email) return;
   S.email = email; S.entrando = email;
-  const { data } = await sb.from('frt_membros').select('*').ilike('email', S.email).maybeSingle();
+  const { data } = await sb.from('frt_membros').select('*').eq('email', S.email).maybeSingle();   // exato: ilike deixava "_" virar curinga
   if(!data || !data.ativo){ S.entrando = ''; await sb.auth.signOut({ scope:'local' }); telaLogin('Este e-mail não tem acesso a esta torre. Fale com o gestor.'); return; }
   S.membro = data; iniciado = true;
   $('#login').hidden = true; $('#app').hidden = false;
@@ -1119,17 +1119,20 @@ const noSistema = r => !!(r && r.status && String(r.atualizado_por||'').includes
 // (convidar só com o e-mail, mensagem pronta para o WhatsApp, renovar prazo, nova senha, tirar acesso).
 const URL_SISTEMA = 'https://luizdeamo-sketch.github.io/torre-frota/';
 const nomeBonito = p => String(p||'').charAt(0) + String(p||'').slice(1).toLowerCase();
+// o código do convite (frt_convites, só o gestor lê) vai na mensagem: sem ele ninguém cria a senha só por saber o e-mail (24/11)
+S.codigos = {};
 function msgConvite(m, nova){
-  const nome = (m.nome || '').split(' ')[0];
+  const nome = (m.nome || '').split(' ')[0], cod = S.codigos[m.email];
   return `Oi${nome ? ', '+nome : ''}! ${nova ? 'Liberei uma nova senha para você' : (m.papel==='programador' ? 'A disponibilidade dos seus caminhões agora é lançada' : 'Liberei o seu acesso')} na ${NOME}.\n\n`
-    + `1. Abra ${URL_SISTEMA}\n2. Clique em "Primeiro acesso ou nova senha"\n3. Use o e-mail ${m.email} e crie uma senha com pelo menos 10 caracteres\n\n`
+    + `1. Abra ${URL_SISTEMA}\n2. Clique em "Primeiro acesso ou nova senha"\n3. Use o e-mail ${m.email}${cod ? ' e o código ' + cod : ''} e crie uma senha com pelo menos 10 caracteres\n\n`
     + `Vale até ${fDiaHora(m.primeiro_acesso_ate)}.${m.papel==='programador' && !nova ? ' Depois é só abrir a tela Hoje todo dia e lançar o status dos seus conjuntos.' : ''}`;
 }
 async function renderEquipe(){
   if(!liberado()) return renderEquipeAntiga();
   const v = $('#view-equipe');
-  const [{ data: membros }, { data: acessos }] = await Promise.all([ sb.from('frt_membros').select('*').order('criado_em'), sb.rpc('frt_acessos') ]);
+  const [{ data: membros }, { data: acessos }, { data: codigos }] = await Promise.all([ sb.from('frt_membros').select('*').order('criado_em'), sb.rpc('frt_acessos'), sb.from('frt_convites').select('email,codigo') ]);
   const ult = {}; (acessos||[]).forEach(a=> ult[a.email] = a.ultimo);
+  S.codigos = {}; (codigos||[]).forEach(c=> S.codigos[c.email] = c.codigo);
   const ms = (membros||[]).filter(m=> !DONOS.includes(m.email) || ehDono());
   const agora = new Date();
   // situação de cada pessoa, em palavras de gente
@@ -1174,6 +1177,8 @@ async function renderEquipe(){
     if(!okEmail(email)){ toast('Digite um e-mail válido.'); inp.focus(); return; }
     if(DONOS.includes(email)){ toast('Esse acesso é do responsável pelo sistema.'); return; }
     const ja = ms.find(m=> m.email===email);
+    // Conselho (dev): convidar no cartão rebaixava um gestor ou tirava a pessoa do cartão de outro colega sem avisar
+    if(ja && (ja.papel!=='programador' || (ja.programador && ja.programador!==p)) && !confirm(`${ja.nome || email} já tem acesso como ${ja.papel==='programador' ? 'programador de ' + nomeBonito(ja.programador) : ja.papel==='admin' ? 'gestor' : 'quem só acompanha'}. Passar para programador de ${nomeBonito(p)}?`)) return;
     gravar({ email, nome: (ja && ja.nome) || nomeBonito(p), papel:'programador', programador:p }, 'Convite criado. Mande a mensagem para a pessoa.');
   }));
   $('#eq-o-add', v).addEventListener('click', ()=>{
