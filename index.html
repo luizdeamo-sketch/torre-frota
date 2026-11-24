@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
-<meta name="app-build" content="202611241121">
+<meta name="app-build" content="202611241148">
 <title>Torre de Controle - Transpanorama</title>
 <link rel="icon" href="favicon.png" type="image/png">
 <link rel="preconnect" href="https://fonts.googleapis.com">
@@ -207,6 +207,18 @@ table.tb tbody tr:hover td{background:var(--panel-2)}
 .meter u{position:absolute;top:-2px;bottom:-2px;width:2px;background:var(--ink)}
 /* pronto antes da segunda: só o gestor vê, com borda roxa tracejada (regra da versão de segunda) */
 .pre-lib{outline:2px dashed #7c3aed;outline-offset:2px}
+/* aviso para todo mundo no topo (ex.: dezembro aberto), fecha e não volta */
+#aviso-topo{display:flex;gap:12px;align-items:flex-start;background:var(--gold-soft);color:var(--ink);border:1px solid var(--gold);border-radius:12px;padding:12px 14px;margin-bottom:14px}
+#aviso-topo[hidden]{display:none}
+.eq-conv[hidden]{display:none}
+/* justificar discreto na tabela do Faturamento (eram 200 botões iguais) */
+.just-link{color:var(--ink-3);font-size:12px;text-decoration:underline dotted;cursor:pointer}
+tr:hover .just-link,[data-just]:focus-within .just-link{color:var(--title)}
+/* celular: alvo de toque de pelo menos 44 px (programador lança com o dedo) e letra um pouco maior */
+@media (max-width:640px){ .btn,.btn.sm,.icon-btn,.st-btn{min-height:44px} .sub{font-size:13px} body{font-size:15px} }
+#aviso-topo{flex-wrap:wrap}
+#aviso-topo .grow{flex:1 1 280px}
+#aviso-topo b{color:var(--title)}
 /* faixa do mês em miniatura (Faturamento) e linha da importação */
 .fx-mini{position:relative;height:12px;width:clamp(150px,13vw,340px);border-radius:4px;background:var(--gray-soft);overflow:hidden}
 .fx-mini i{position:absolute;top:0;bottom:0;border-right:1px solid var(--panel)}
@@ -459,6 +471,7 @@ a.btn{text-decoration:none}
       <button type="button" class="icon-btn" id="btn-sair" title="Sair"><svg viewBox="0 0 24 24"><path d="M15 4h4v16h-4M10 8l-4 4 4 4M6 12h10"/></svg><span>Sair</span></button>
     </header>
     <main class="content">
+      <div id="aviso-topo" hidden></div>
       <section class="view" id="view-apresentacao"></section>
       <section class="view" id="view-painel"></section>
       <section class="view" id="view-analise"></section>
@@ -474,7 +487,7 @@ a.btn{text-decoration:none}
 <div id="modal-root"></div>
 
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.45.4/dist/umd/supabase.min.js"></script>
-<script src="app.js?v=202611241121"></script>
-<script src="acompanhante.js?v=202611241121"></script>
+<script src="app.js?v=202611241148"></script>
+<script src="acompanhante.js?v=202611241148"></script>
 </body>
 </html>

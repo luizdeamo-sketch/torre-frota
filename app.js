@@ -159,6 +159,7 @@ async function sessao(session){
   else if(data.papel==='admin' && !ehDono() && liberado() && !lsGet(tourEquipeChave(), '')){ novidadesCarregar().then(novMarcarVisto); setTimeout(()=> tourAbrir('primeira', 'equipe'), 600); }
   else novidadesIniciar();
   S.entrando = '';
+  avisoTopo();
   retornoIniciar();
   window.dispatchEvent(new CustomEvent('frt-entrou'));
 }
@@ -175,12 +176,11 @@ async function carregarBase(){
     S.grids = {}; (gr.data||[]).forEach(g=> S.grids[g.grid] = g);
     S.metas = {}; (me.data||[]).forEach(m=> S.metas[m.competencia.slice(0,7)+'|'+m.grid] = Number(m.meta_veiculo));
     S.veic = ve; S.progs = (pr.data||[]).map(p=>p.nome);
-    // mês padrão: o de hoje; se o banco ainda não tem dado dele, o último mês com meta
-    const meses = [...new Set(Object.keys(S.metas).map(k=>k.split('|')[0]))].sort();
-    S.meses = meses; const mh = hojeISO().slice(0,7);
-    S.mes = lsGet('frt_mes', '') || (meses.includes(mh) ? mh : meses[meses.length-1] || mh);
-    if(!meses.includes(S.mes)) S.mes = meses[meses.length-1] || mh;
-    S.dia = S.mes===mh ? hojeISO() : diaDoMes(S.mes, diasDoMes(S.mes));
+    // Conselho/dev (24/11): o mês só existia se tivesse meta no banco, e na virada (01/12) a Hoje travava em 30/11.
+    // Agora o mês de hoje e o seguinte (para deixar planejado) sempre aparecem, e a torre abre sempre no mês e no dia de hoje.
+    const mh = hojeISO().slice(0,7), prox = somaDias(diaDoMes(mh, diasDoMes(mh)), 1).slice(0,7);
+    S.meses = [...new Set([...Object.keys(S.metas).map(k=>k.split('|')[0]), mh, prox])].sort();
+    S.mes = mh; S.dia = hojeISO();
     await carregarMes();
   }catch(e){ toast('Não consegui carregar os dados: '+(e.message||e)); }
 }
@@ -195,6 +195,7 @@ async function carregarMes(){
   S.just = {}; just.forEach(j=> S.just[j.placa] = j);
   S.fatImportado = fat.reduce((a,f)=> f.importado_em && (!a || f.importado_em > a) ? f.importado_em : a, null);
   S.fatImportadoPor = (fat.find(f=> f.importado_em===S.fatImportado) || {}).importado_por || '';
+  S.ultimaLeitura = (await sb.rpc('frt_ultima_leitura')).data || null;
   // o que a planilha do mês trazia na última leitura (só o gestor lê o registro): para avisar quando ela tem CT-e a mais
   S.planilha = null;
   if(ehAdmin()){ const { data } = await sb.from('frt_sync_log').select('em,resumo').eq('mes', S.mes).eq('ok', true).order('em', { ascending:false, nullsFirst:false }).limit(1);
@@ -236,8 +237,32 @@ async function salvarDia(placa, dia, status, obs, ate){
   return true;
 }
 
+// Conselho/dev (24/11): "Repetir ontem" gravava por cima do que um colega (ou a planilha) já tinha lançado depois que a
+// tela foi carregada. Agora só preenche o que está vazio no banco; o que já tem status fica como está.
+const COLS_DIA = 'placa,dia,status,obs,atualizado_em,atualizado_por';
+async function gravarSoVazios(linhas){
+  const ins = await sb.from('frt_dias').upsert(linhas, { onConflict:'placa,dia', ignoreDuplicates:true }).select(COLS_DIA);
+  if(ins.error) return { error:ins.error };
+  const out = [...(ins.data||[])], feitos = new Set(out.map(r=> r.placa+'|'+r.dia));
+  // linha que existe mas está sem status (dia limpo): preenche só se continuar vazia
+  for(const l of linhas.filter(l=> !feitos.has(l.placa+'|'+l.dia) && reg(l.placa, l.dia) && !reg(l.placa, l.dia).status)){
+    const u = await sb.from('frt_dias').update({ status:l.status, obs:l.obs }).eq('placa', l.placa).eq('dia', l.dia).is('status', null).select(COLS_DIA);
+    if(u.data) out.push(...u.data);
+  }
+  return { data:out, pulados: linhas.length - out.length };
+}
+// dados sempre frescos: ao voltar para a aba e a cada 2 minutos, sem atrapalhar quem está digitando ou com janela aberta
+async function recarregar(){
+  if(S._recarregando || !S.membro || document.hidden || window.FR_tour || $('#modal-root').innerHTML
+     || ['INPUT','TEXTAREA','SELECT'].includes((document.activeElement||{}).tagName) || !['hoje','quadro','painel','analise','faturamento'].includes(S.view)) return;
+  S._recarregando = true;
+  try{ await carregarMes(); render(); }catch(e){} finally{ S._recarregando = false; }
+}
+document.addEventListener('visibilitychange', ()=>{ if(!document.hidden) recarregar(); });
+setInterval(recarregar, 120000);
+
 /* ---------- navegação ---------- */
-const VIEWS = ['apresentacao','painel','analise','hoje','quadro','faturamento','sugestoes','equipe'];
+const VIEWS =['apresentacao','painel','analise','hoje','quadro','faturamento','sugestoes','equipe'];
 const TITULOS = { apresentacao:'Apresentação', painel:'Painel', analise:'Análise', hoje:'Hoje', quadro:'Quadro do mês', faturamento:'Faturamento × meta', sugestoes:'Sugestões', equipe:'Equipe' };
 $$('.nav').forEach(b=> b.addEventListener('click', ()=> irPara(b.dataset.view)));
 function irPara(v){
@@ -246,6 +271,7 @@ function irPara(v){
   $$('.nav').forEach(b=> b.classList.toggle('on', b.dataset.view===v));
   $$('.view').forEach(s=> s.classList.toggle('active', s.id==='view-'+v));
   render(); window.scrollTo(0,0);
+  const on = $('.nav.on'); if(on && innerWidth < 900) on.scrollIntoView({ block:'nearest', inline:'center' });
   if(window.FR_retornoTela) window.FR_retornoTela();
 }
 function render(){
@@ -253,12 +279,38 @@ function render(){
   ({ apresentacao:renderApresentacao, painel:renderPainel, analise:renderAnalise, hoje:renderHoje, quadro:renderQuadro, faturamento:renderFaturamento, sugestoes:renderSugestoes, equipe:renderEquipe })[S.view]();
 }
 
+// Aviso fixo no topo para quem entrar (pedido do Luiz, 24/11): dezembro aberto para planejar. Some ao fechar ou na data.
+const AVISOS = [
+  { id:'dezembro-aberto', ate:'2026-12-07', so:['programador','admin'],
+    html: ()=> `📅 <b>Dezembro já está aberto na Torre.</b> Lance o planejamento de dezembro direto aqui: na tela <b>Hoje</b>, use a seta <b>›</b> para chegar em dezembro e marque o que já se sabe (férias, manutenção, folga), com <b>Repetir até</b> para vários dias de uma vez. No dia, é só clicar em <b>Repetir ontem</b> e mudar o que mudou.` } ];
+function avisoTopo(){
+  const box = $('#aviso-topo'), pap = S.membro ? S.membro.papel : '';
+  const a = AVISOS.find(x=> hojeISO() <= x.ate && x.so.includes(pap) && !lsGet('frt_aviso:'+x.id+':'+S.email, ''));
+  if(!a){ box.hidden = true; return; }
+  box.innerHTML = `<div class="grow">${a.html()}</div><button class="btn sm" type="button" id="av-hoje">Ir para Hoje</button><button class="btn sm" type="button" id="av-x" aria-label="Fechar o aviso">Entendi</button>`;
+  box.hidden = false;
+  $('#av-hoje', box).addEventListener('click', ()=> irPara('hoje'));
+  $('#av-x', box).addEventListener('click', ()=>{ lsSet('frt_aviso:'+a.id+':'+S.email, '1'); box.hidden = true; window.FR_uso && window.FR_uso('aviso', 'fechou', { id:a.id }); });
+}
+// meta do veículo no mês; mês sem meta cadastrada usa a do último mês que tem (igual ao que o sync faz com a planilha)
+function metaDe(mes, grid){
+  if(S.metas[mes+'|'+grid] != null) return S.metas[mes+'|'+grid];
+  const ant = Object.keys(S.metas).filter(k=> k.endsWith('|'+grid) && k < mes).sort().pop();
+  return ant ? S.metas[ant] : 0;
+}
+// a única troca de mês da torre (Painel, Análise, Quadro, Faturamento e a Hoje quando passa de um mês para o outro)
+async function trocarMes(m, dia){
+  const h = hojeISO();
+  S.mes = m; S.dia = dia || (m===h.slice(0,7) ? h : m < h.slice(0,7) ? diaDoMes(m, diasDoMes(m)) : diaDoMes(m, 1));
+  await carregarMes(); render();
+}
+
 /* ---------- barra de filtros comum (Hoje e Quadro) ---------- */
 function barraFiltros(comDia){
   const F = S.f, ops = [...new Set(S.veic.map(v=>v.operacao).filter(Boolean))].sort();
   const opt = (vals, sel, todos, nome) => `<option value="">${esc(todos)}</option>` + vals.map(x=>`<option value="${esc(x)}" ${x===sel?'selected':''}>${esc(nome?nome(x):x)}</option>`).join('');
   return `<div class="card bar">
-    ${comDia ? `<span class="dia"><button class="btn sm" type="button" data-dia="-1" aria-label="Dia anterior">‹</button><input type="date" id="f-dia" value="${S.dia}" min="${diaDoMes(S.mes,1)}" max="${diaDoMes(S.mes,diasDoMes(S.mes))}"><button class="btn sm" type="button" data-dia="1" aria-label="Próximo dia">›</button><button class="btn sm" type="button" id="f-hoje">Hoje</button></span>`
+    ${comDia ? `<span class="dia"><button class="btn sm" type="button" data-dia="-1" aria-label="Dia anterior">‹</button><input type="date" id="f-dia" value="${S.dia}" min="${diaDoMes(S.meses[0],1)}" max="${diaDoMes(S.meses[S.meses.length-1],diasDoMes(S.meses[S.meses.length-1]))}"><button class="btn sm" type="button" data-dia="1" aria-label="Próximo dia">›</button><button class="btn sm" type="button" id="f-hoje">Hoje</button></span>`
       : `<select id="f-mes" aria-label="Mês">${(S.meses||[S.mes]).map(m=>`<option value="${m}" ${m===S.mes?'selected':''}>${new Date(m+'-15T12:00').toLocaleDateString('pt-BR',{month:'long',year:'numeric'})}</option>`).join('')}</select>`}
     <input type="search" id="f-busca" placeholder="Buscar placa, carreta ou motorista" value="${esc(F.busca)}">
     <select id="f-prog" aria-label="Programador">${opt(S.progs, F.prog, 'Todos os programadores', p=> p.charAt(0)+p.slice(1).toLowerCase())}</select>
@@ -273,12 +325,14 @@ function ligarFiltros(v, rerender){
   $('#f-prog', v).addEventListener('change', e=>{ F.prog = e.target.value; lsSet('frt_f_prog:'+S.email, F.prog || '*'); rerender(); });
   $('#f-grid', v).addEventListener('change', e=>{ F.grid = e.target.value; rerender(); });
   $('#f-op', v).addEventListener('change', e=>{ F.op = e.target.value; rerender(); });
-  const fd = $('#f-dia', v); if(fd){ fd.addEventListener('change', ()=>{ if(fd.value){ S.dia = fd.value; rerender(); } });
-    $$('[data-dia]', v).forEach(x=> x.addEventListener('click', ()=>{ const n = somaDias(S.dia, +x.dataset.dia); if(n.slice(0,7)===S.mes){ S.dia = n; rerender(); } }));
-    $('#f-hoje', v).addEventListener('click', ()=>{ const h = hojeISO(); S.dia = h.slice(0,7)===S.mes ? h : diaDoMes(S.mes, diasDoMes(S.mes)); rerender(); }); }
+  // trocar de dia na Hoje: dentro do mês só redesenha; se passar para outro mês (de 30/11 para 01/12), carrega o mês novo
+  const irDia = d=>{ if(!d || !S.meses.includes(d.slice(0,7))) return; if(d.slice(0,7)===S.mes){ S.dia = d; rerender(); } else trocarMes(d.slice(0,7), d); };
+  const fd = $('#f-dia', v); if(fd){ fd.addEventListener('change', ()=> irDia(fd.value));
+    $$('[data-dia]', v).forEach(x=> x.addEventListener('click', ()=> irDia(somaDias(S.dia, +x.dataset.dia))));
+    $('#f-hoje', v).addEventListener('click', ()=> irDia(hojeISO())); }
   const bm = $('[data-filtros]', v); if(bm){ const bar = bm.closest('.bar'); bar.classList.toggle('aberta', bm.getAttribute('aria-expanded')==='true');
     bm.addEventListener('click', ()=>{ const ab = !bar.classList.contains('aberta'); bar.classList.toggle('aberta', ab); bm.setAttribute('aria-expanded', ab); bm.textContent = ab ? 'Menos filtros ▴' : 'Mais filtros ▾'; }); }
-  const fm = $('#f-mes', v); if(fm) fm.addEventListener('change', async ()=>{ S.mes = fm.value; lsSet('frt_mes', S.mes); S.dia = S.mes===hojeISO().slice(0,7) ? hojeISO() : diaDoMes(S.mes, diasDoMes(S.mes)); await carregarMes(); rerender(); });
+  const fm = $('#f-mes', v); if(fm) fm.addEventListener('change', ()=> trocarMes(fm.value));
 }
 
 /* ---------- seletor de status (o clique do programador) ---------- */
@@ -293,7 +347,7 @@ function modalStatus(placa, dia, aoSalvar){
       <div class="st-grid">${Object.keys(porGrupo).map(g=>`<div class="st-grupo"><b>${esc(g)}${porGrupo[g][0].disponivel?' · conta como disponível':' · conta como indisponível'}</b><div class="st-opts">${porGrupo[g].map(s=>`<button type="button" class="st-opt ${s.codigo===escolhido?'on':''}" data-st="${esc(s.codigo)}"><i style="background:${esc(s.cor)}"></i>${esc(s.nome)}</button>`).join('')}</div></div>`).join('')}</div>
       <div class="form">
         <label class="fld full"><span>Observação (opcional)</span><input id="ms-obs" value="${esc(r.obs||'')}" placeholder="Ex.: falta troca de NF, quer folgar em Maringá"></label>
-        <label class="fld"><span>Repetir até (opcional, para férias ou manutenção já marcada)</span><input id="ms-ate" type="date" min="${somaDias(dia,1)}" max="${diaDoMes(S.mes, diasDoMes(S.mes))}"></label>
+        <label class="fld"><span>Repetir até (opcional, para férias ou manutenção já marcada)</span><input id="ms-ate" type="date" min="${somaDias(dia,1)}" max="${diaDoMes(S.meses[S.meses.length-1], diasDoMes(S.meses[S.meses.length-1]))}"></label>
       </div>
       <div class="fld"><span>Histórico deste conjunto</span><div class="hist" id="ms-hist"><span class="muted">Carregando…</span></div></div>
     </div>
@@ -302,7 +356,13 @@ function modalStatus(placa, dia, aoSalvar){
     const ro = $('#ms-ontem', bg); if(ro) ro.addEventListener('click', ()=>{ escolhido = ontem.status; $('#ms-obs', bg).value = ontem.obs || ''; $$('[data-st]', bg).forEach(x=> x.classList.toggle('on', x.dataset.st===escolhido)); });
     $('#ms-ok', bg).addEventListener('click', async ()=>{
       if(!escolhido){ toast('Escolha um status antes de salvar.'); return; }
+      const ok = $('#ms-ok', bg); if(ok.disabled) return; ok.disabled = true;
+      // alguém mudou este dia depois que a tela foi aberta? avisa antes de trocar (Conselho/dev, 24/11)
+      const agora = (await sb.from('frt_dias').select(COLS_DIA).eq('placa', placa).eq('dia', dia).maybeSingle()).data;
+      if(agora && agora.status && agora.atualizado_em !== r.atualizado_em && agora.status !== escolhido && agora.atualizado_por !== S.email
+         && !confirm(`${agora.atualizado_por==='planilha' ? 'A planilha' : agora.atualizado_por} mudou ${v.placa} em ${fDia(dia)} para "${(S.status[agora.status]||{}).nome||agora.status}" às ${fDiaHora(agora.atualizado_em)}, depois que você abriu a tela. Trocar para "${S.status[escolhido].nome}" mesmo assim?`)){ ok.disabled = false; S.dias.set(placa+'|'+dia, agora); fecharModal(); render(); return; }
       if(await salvarDia(placa, dia, escolhido, $('#ms-obs', bg).value.trim(), $('#ms-ate', bg).value)){ toast('Salvo: '+v.placa+' · '+S.status[escolhido].nome); fecharModal(); aoSalvar ? aoSalvar() : render(); }
+      else ok.disabled = false;
     });
     const lp = $('#ms-limpar', bg); if(lp) lp.addEventListener('click', async ()=>{ if(await salvarDia(placa, dia, null, null)){ toast('Dia limpo.'); fecharModal(); render(); } });
     sb.from('frt_dias_hist').select('*').eq('placa', placa).order('em', { ascending:false }).limit(30).then(({ data })=>{
@@ -318,7 +378,7 @@ function abrirFicha(placa){
   const n = diasDoMes(S.mes), ate = refDia();
   let disp = 0, ind = 0, vaz = 0; const motivos = {};
   for(let d=1; d<=n; d++){ const s = diaDoMes(S.mes,d); if(s > hojeISO()) break; const st = stDe(placa, s); if(!st){ vaz++; continue; } if(st.disponivel) disp++; else { ind++; motivos[st.nome] = (motivos[st.nome]||0)+1; } }
-  const meta = S.metas[S.mes+'|'+v.grid] || 0, esp = meta*ate/n, fat = S.fat[placa]||0;
+  const lf = linhasFat().find(l=> l.x.placa===placa), meta = lf ? lf.meta : metaDe(S.mes, v.grid), esp = lf ? lf.esp : meta*ate/n, fat = S.fat[placa]||0;   // a mesma meta proporcional da tabela do Faturamento
   const mot = Object.entries(motivos).sort((a,b)=>b[1]-a[1]).map(([k,q])=>q+' '+k.toLowerCase()).join(', ');
   abrirModal(`<div class="modal-h"><div><h3><span class="mono">${esc(v.placa)}</span> · ${esc(v.motorista||'sem motorista')}</h3><div class="sub">Carretas ${esc([v.carreta1,v.carreta2].filter(Boolean).join(' + ')||'–')} · ${esc((S.grids[v.grid]||{}).nome||'')} · ${esc(v.operacao||'')} · programador ${esc(v.programador||'–')}</div></div><button class="x" data-close aria-label="Fechar">✕</button></div>
     <div class="modal-b">
@@ -369,7 +429,7 @@ function renderApresentacao(){
       <div class="acts" style="margin-top:6px"><button class="btn gold" type="button" data-ir="painel">Ver o Painel →</button><button class="btn" type="button" data-ir="hoje">Tela Hoje</button><button class="btn" type="button" id="sb-tour">Ver o passo a passo</button></div></div>
 
     <div class="sb-sec"><h3>Como a torre foi montada aqui</h3><div class="sb-cards">
-      <div class="card sb-card"><div class="verbo">Lê</div><ul><li>A planilha do mês ("${esc(nomeMes(S.mes).toUpperCase())} - DISPONIBILIDADE", 11 abas), lida sozinha várias vezes por dia: ${fN(nv)} conjuntos, ${ng} grids, 4 programadores, um status por dia. O que alguém lança aqui vale mais que a planilha.</li><li>O faturamento por CT-e da aba Faturamento RAW (${fN(S.fatLinhas)} CT-e de ${esc(nomeMes(S.mes))}). O gestor também pode importar o relatório do jeito que sai do sistema.</li><li>As metas por veículo de cada grid, da aba Gestão Frota, e as justificativas do Dashboard.</li></ul></div>
+      <div class="card sb-card"><div class="verbo">Lê</div><ul><li>A planilha do mês ("${esc(nomeMes(S.mes).toUpperCase())} - DISPONIBILIDADE", 11 abas), atualizada aqui sempre que a Capacity Case lê a planilha${S.ultimaLeitura ? ' (última leitura: '+fDiaHora(S.ultimaLeitura)+')' : ''}: ${fN(nv)} conjuntos, ${ng} grids, 4 programadores, um status por dia. O que alguém lança aqui vale mais que a planilha.</li><li>O faturamento por CT-e da aba Faturamento RAW (${fN(S.fatLinhas)} CT-e de ${esc(nomeMes(S.mes))}). O gestor também pode importar o relatório do jeito que sai do sistema.</li><li>As metas por veículo de cada grid, da aba Gestão Frota, e as justificativas do Dashboard.</li></ul></div>
       <div class="card sb-card"><div class="verbo">Junta</div><ul><li>Disponibilidade, faturamento e meta na mesma régua: cada placa mostra os dias parados e o quanto deixou de faturar.</li><li>As abas Resumo, Gestão Frota e Dashboard viram contas automáticas, com uma regra só.</li><li>Placas escritas de jeitos diferentes (".DTP5A91", "CTP-9F88") passam a ser uma placa só, sem a aba "Faturamento consolidado".</li><li>A justificativa de quem não bateu a meta já vem sugerida pelos dias lançados ("8 dias de manutenção corretiva, 5 de folga").</li></ul></div>
       <div class="card sb-card"><div class="verbo">Cria</div><ul><li>A tela Hoje: o programador vê só os caminhões dele e muda o status com um clique.</li><li>O aviso de conjunto sem lançamento e de manutenção que já passou de 3 dias.</li><li>O histórico de quem mudou o quê e quando, que a planilha não guarda.</li></ul></div>
     </div></div>
@@ -393,7 +453,7 @@ function renderApresentacao(){
     </div></div>
 
     <div class="sb-sec"><h3>Como funciona</h3><div class="sb-fluxo">
-      <div class="card"><b>1 · Origem</b><span class="sub">O programador lança o status do dia na tela Hoje. Enquanto o time não migra de vez, a planilha do mês é lida sozinha e completa o que não foi lançado aqui. O faturamento vem da aba de CT-e da mesma planilha.</span></div>
+      <div class="card"><b>1 · Origem</b><span class="sub">O programador lança o status do dia na tela Hoje. Enquanto o time não migra de vez, a planilha do mês é lida pela Capacity Case e completa o que não foi lançado aqui. O faturamento vem do relatório de CT-e que o gestor importa (ou da aba de CT-e da planilha).</span></div>
       <div class="card"><b>2 · Organiza</b><span class="sub">Uma regra só no banco: rodando ou parado com cota conta como disponível; manutenção, motorista e SSMA contam como indisponível.</span></div>
       <div class="card"><b>3 · Mostra</b><span class="sub">Hoje, Quadro do mês e Faturamento × meta, com os mesmos números para todo mundo.</span></div>
       <div class="card"><b>4 · Age</b><span class="sub">Quem está sem lançamento, quem está parado há dias e quem está longe da meta aparecem primeiro.</span></div>
@@ -402,7 +462,7 @@ function renderApresentacao(){
     <div class="sb-sec"><h3>O que estamos construindo primeiro</h3><div class="sb-pri">
       <div class="card"><span>1</span><b>Disponibilidade diária no sistema</b><span class="tag green">tela pronta</span><span class="sub">Hoje e Quadro do mês, com histórico.</span></div>
       <div class="card"><span>2</span><b>Faturamento × meta por grid e por placa</b><span class="tag green">tela pronta</span><span class="sub">Lido da planilha do mês, com a meta proporcional.</span></div>
-      <div class="card"><span>·</span><b>Time lançando a disponibilidade direto aqui</b><span class="tag amber">piloto a partir de 16/11</span><span class="sub">Um programador primeiro; depois os quatro, e a planilha deixa de ser preenchida.</span></div>
+      <div class="card"><span>·</span><b>Time lançando a disponibilidade direto aqui</b><span class="tag amber">em andamento</span><span class="sub">Os quatro programadores foram convidados em 24/11 e dezembro já está aberto para planejar aqui. Quando todos estiverem lançando, a planilha deixa de ser preenchida.</span></div>
       <div class="card"><span>3</span><b>Importar o relatório de faturamento do jeito que ele sai</b><span class="tag green">tela pronta</span><span class="sub">Botão em Faturamento × meta, só para o gestor.</span></div>
       <div class="card"><span>4</span><b>Ler o relatório de faturamento sozinho, todo dia</b><span class="tag amber">próximo passo</span><span class="sub">Precisa do acesso ao relatório no sistema.</span></div>
       <div class="card"><span>5</span><b>Programação de viagens (origem, destino, agendamento)</b><span class="tag">depois</span><span class="sub">As abas Programação e Noruega.</span></div>
@@ -449,7 +509,7 @@ function renderHoje(){
   const lista = base.slice().sort((a,b)=> peso(a)-peso(b) || a.placa.localeCompare(b.placa));
   const vazios = semChip.filter(x=> grupoDe(x.placa,dia)==='vazio');
   const comOntem = vazios.filter(x=> reg(x.placa, somaDias(dia,-1)) && reg(x.placa, somaDias(dia,-1)).status);
-  v.innerHTML = `<div class="head"><div><span class="eyebrow">Hoje · o lançamento do dia</span><h2>${esc(fDia(dia))}</h2><p>${F.prog?`Caminhões de ${esc(F.prog.charAt(0)+F.prog.slice(1).toLowerCase())}. `:''}${fN(semChip.length)} conjuntos · ${fP(semChip.length?nDisp/semChip.length:0)} disponíveis${futuro?' · dia futuro: dá para deixar marcado o que já se sabe (férias, manutenção).':''}</p></div>
+  v.innerHTML = `<div class="head"><div><span class="eyebrow">Hoje · o lançamento do dia</span><h2>${esc(fDia(dia))}</h2><p>${F.prog?`Caminhões de ${esc(F.prog.charAt(0)+F.prog.slice(1).toLowerCase())}. `:''}${fN(semChip.length)} conjuntos · ${fP(semChip.length?nDisp/semChip.length:0)} disponíveis${futuro?' · dia futuro: dá para deixar marcado o que já se sabe (férias, manutenção).':''}${S.ultimaLeitura?` <span class="sub" title="O que não foi lançado aqui vem da planilha, lida nesta data">· planilha lida em ${esc(fDiaHora(S.ultimaLeitura))}</span>`:''}</p></div>
       <div class="acts">${comOntem.length && podeEscrever() ? `<button class="btn pri" type="button" id="h-repetir" title="Copia o status de ontem nos conjuntos que ainda não foram lançados hoje">Repetir ontem nos ${comOntem.length} sem lançamento</button>` : ''}</div></div>
     ${barraFiltros(true)}
     <div class="tl-cards">
@@ -465,13 +525,22 @@ function renderHoje(){
   const xc = $('#h-xchip', v); if(xc) xc.addEventListener('click', ()=>{ F.chip = ''; renderHoje(); });
   $$('[data-st-placa]', v).forEach(b=> b.addEventListener('click', ()=> modalStatus(b.dataset.stPlaca, dia, renderHoje)));
   $$('[data-ficha]', v).forEach(b=> b.addEventListener('click', ()=> abrirFicha(b.dataset.ficha)));
-  $$('[data-rep]', v).forEach(b=> b.addEventListener('click', async ()=>{ const o = reg(b.dataset.rep, somaDias(dia,-1)); if(o && await salvarDia(b.dataset.rep, dia, o.status, o.obs)){ toast('Repetido: '+b.dataset.rep); renderHoje(); } }));
+  $$('[data-rep]', v).forEach(b=> b.addEventListener('click', async ()=>{
+    const o = reg(b.dataset.rep, somaDias(dia,-1)); if(!o || !guard()) return; b.disabled = true;
+    const r = await gravarSoVazios([{ placa:b.dataset.rep, dia, status:o.status, obs:o.obs||null }]);
+    if(r.error){ toast('Não salvou: '+r.error.message); b.disabled = false; return; }
+    if(r.pulados){ toast('Alguém já lançou esse dia de '+b.dataset.rep+'. Atualizei a tela.'); await carregarMes(); }
+    else { r.data.forEach(x=> S.dias.set(x.placa+'|'+x.dia, x)); toast('Repetido: '+b.dataset.rep); }
+    renderHoje(); }));
   const rp = $('#h-repetir', v); if(rp) rp.addEventListener('click', async ()=>{
     if(!rp.dataset.ok){ rp.dataset.ok = '1'; rp.textContent = 'Confirmar: copiar ontem em '+comOntem.length+'?'; return; }
+    if(!guard()) return;
     rp.disabled = true; const linhas = comOntem.map(x=>{ const o = reg(x.placa, somaDias(dia,-1)); return { placa:x.placa, dia, status:o.status, obs:o.obs||null }; });
-    const { data, error } = await sb.from('frt_dias').upsert(linhas, { onConflict:'placa,dia' }).select('placa,dia,status,obs,atualizado_em,atualizado_por');
-    if(error){ toast('Não salvou: '+error.message); rp.disabled = false; return; }
-    (data||[]).forEach(r=> S.dias.set(r.placa+'|'+r.dia, r)); toast(linhas.length+' conjuntos com o status de ontem. Confira os que mudaram.'); renderHoje();
+    const r = await gravarSoVazios(linhas);
+    if(r.error){ toast('Não salvou: '+r.error.message); rp.disabled = false; return; }
+    await carregarMes();
+    toast(r.data.length+' conjuntos com o status de ontem.'+(r.pulados ? ' '+r.pulados+' já tinham sido lançados por outra pessoa e ficaram como estavam.' : ' Confira os que mudaram.'));
+    renderHoje();
   });
 }
 // Cobrança do dia (gestor): por programador, quantos conjuntos ainda estão sem lançamento e um WhatsApp pronto para cobrar.
@@ -683,7 +752,7 @@ function resumoMes(D, ate){
   R.disp = R.lanDias ? R.dispDias/R.lanDias : null;          // sobre o que foi lançado: mês aberto e fechado comparáveis
   R.lanMedio = ate ? R.lanDias/ate : 0;
   S.veic.forEach(x=>{
-    const base = S.metas[D.mes+'|'+x.grid] || 0, dia = base/n; let entrou = 0, dd = 0, ii = 0, val = 0, ep = 0, emManut = false; const mot = {};
+    const base = metaDe(D.mes, x.grid), dia = base/n; let entrou = 0, dd = 0, ii = 0, val = 0, ep = 0, emManut = false; const mot = {};
     for(let d=1; d<=n; d++){ const s = diaDoMes(D.mes,d), t = st(x.placa,s); if(t && !entrou) entrou = d; if(d > ate) continue;
       const manut = !!(t && GRUPO_DE[t.grupo]==='manut'); if(manut && !emManut) ep++; emManut = manut;
       if(!t) continue;
@@ -769,7 +838,7 @@ async function renderAnalise(){
         <div class="pn-dias" style="grid-template-columns:repeat(${nA},1fr);margin-left:0">${Array.from({length:nA},(_,i)=>`<span>${(i+1)===1||(i+1)%5===0?i+1:''}</span>`).join('')}</div>
         <p class="sub" style="margin:0">${esc(nB_)} não entra aqui: a planilha dele veio sem a data de emissão ("########").</p></section>`:''}
     </div>`;
-  $('#an-mes', v).addEventListener('change', async e=>{ S.mes = e.target.value; lsSet('frt_mes', S.mes); await carregarMes(); renderAnalise(); });
+  $('#an-mes', v).addEventListener('change', e=> trocarMes(e.target.value));
   $$('[data-ficha]', v).forEach(b=> b.addEventListener('click', ()=> abrirFicha(b.dataset.ficha)));
   $$('[data-grid]', v).forEach(b=> b.addEventListener('click', ()=>{ S.fatF.grid = b.dataset.grid; S.fatF.sit = ''; irPara('faturamento'); }));
 }
@@ -788,9 +857,11 @@ function renderPainel(){
     return { d, c, disp, lanc: N - c.vazio, fechado: N && c.vazio <= N/2 }; });
   // dia com mais da metade sem lançamento ainda está em aberto (é o caso de hoje de manhã): fica fora da linha e da média,
   // senão a disponibilidade "despenca" só porque os programadores ainda não lançaram
-  const pctDe = r => r.fechado ? r.disp / N : null;
-  const comDado = porDia.filter(r=> r.fechado);
-  const media = comDado.length ? comDado.reduce((a,r)=> a + r.disp/N, 0) / comDado.length : null;
+  // Conselho/dados (24/11): uma régua só para Painel e Análise, sobre os conjuntos LANÇADOS no dia (conjunto que entrou no
+  // meio do mês ou que ainda não foi lançado não conta como indisponível)
+  const pctDe = r => r.fechado && r.lanc ? r.disp / r.lanc : null;
+  const comDado = porDia.filter(r=> r.fechado && r.lanc);
+  const media = comDado.length ? comDado.reduce((a,r)=> a + r.disp/r.lanc, 0) / comDado.length : null;
   const hj = comDado[comDado.length-1], aberto = porDia.length && !porDia[porDia.length-1].fechado ? porDia[porDia.length-1] : null;
   // faturamento: as mesmas linhas da tela Faturamento × meta
   const todas = linhasFat(), fl = todas.filter(l=> !g || l.x.grid===g);
@@ -812,8 +883,8 @@ function renderPainel(){
       <div class="acts"><select id="pn-grid" class="btn" aria-label="Grid"><option value="">Todos os grids</option>${Object.keys(S.grids).map(k=>`<option value="${esc(k)}" ${k===g?'selected':''}>${esc(S.grids[k].nome)}</option>`).join('')}</select>
         <select id="pn-mes" class="btn" aria-label="Mês">${(S.meses||[S.mes]).map(m=>`<option value="${m}" ${m===S.mes?'selected':''}>${new Date(m+'-15T12:00').toLocaleDateString('pt-BR',{month:'long',year:'numeric'})}</option>`).join('')}</select></div></div>
     <div class="kpis pn-kpis">
-      <button type="button" class="card kpi pn-k" data-pn="hoje"><small>Disponíveis ${hj && hj.d===hoje ? 'hoje' : hj ? 'em '+esc(fDia(hj.d)) : ''}</small><b>${hj ? fN(hj.disp) : '–'}</b><div class="sub">de ${fN(N)} conjuntos · ${fP(hj ? hj.disp/N : null)}${aberto ? ` · ${aberto.d===hoje?'hoje':esc(fDia(aberto.d))}: ${aberto.lanc} de ${N} lançados` : hj && hj.c.vazio ? ` · ${hj.c.vazio} sem lançamento` : ''}</div></button>
-      <button type="button" class="card kpi pn-k" data-pn="quadro"><small>Disponibilidade média do mês</small><b>${fP(media)}</b><div class="sub">nos ${comDado.length} dias lançados</div></button>
+      <button type="button" class="card kpi pn-k" data-pn="hoje"><small>Disponíveis ${hj && hj.d===hoje ? 'hoje' : hj ? 'em '+esc(fDia(hj.d)) : ''}</small><b>${hj ? fN(hj.disp) : '–'}</b><div class="sub">de ${fN(hj ? hj.lanc : N)} lançados · ${fP(hj && hj.lanc ? hj.disp/hj.lanc : null)}${aberto ? ` · ${aberto.d===hoje?'hoje':esc(fDia(aberto.d))}: ${aberto.lanc} de ${N} lançados` : hj && hj.c.vazio ? ` · ${hj.c.vazio} sem lançamento` : ''}</div></button>
+      <button type="button" class="card kpi pn-k" data-pn="quadro"><small>Disponibilidade média do mês</small><b>${fP(media)}</b><div class="sub">dos lançados, nos ${comDado.length} dias com lançamento</div></button>
       <button type="button" class="card kpi pn-k" data-pn="fat"><small>Ritmo do faturamento</small><b style="color:${corRit(ritmo)}">${fP(ritmo)}</b><div class="sub">${fRk(fatTot)} de ${fRk(tot.esp)} esperados até o dia ${refDia()}</div></button>
       <button type="button" class="card kpi pn-k" data-pn="fat" title="Estimativa: o faturado até agora dividido pelos dias que passaram, vezes os dias do mês"><small>Previsão de fechamento</small><b style="color:${corRit(prev!=null && tot.meta ? prev/tot.meta : null)}">${fRk(prev)}</b><div class="sub">${fP(prev!=null && tot.meta ? prev/tot.meta : null)} da meta de ${fRk(tot.meta)} · estimativa no ritmo atual</div></button>
       <button type="button" class="card kpi pn-k" data-pn="crit"><small>Placas críticas</small><b style="color:var(--red)">${fN(crit)}</b><div class="sub">abaixo de 50% do ritmo</div></button>
@@ -827,7 +898,7 @@ function renderPainel(){
         <p class="sub" style="margin:0">É a meta que deixou de entrar, não o prejuízo contábil. Conta: meta do mês do conjunto ÷ dias do mês, por dia parado, a partir do dia em que ele entrou na frota.</p>
       </section>
 
-      <section class="card pn-card pn-largo"><div class="pn-h"><h3>Disponibilidade dia a dia</h3><span class="sub">% dos ${fN(N)} conjuntos rodando ou parados com cota${media!=null?` · tracejado = média do mês (${fP(media)})`:''}${aberto?` · ${aberto.d===hoje?'hoje':esc(fDia(aberto.d))} ainda em lançamento, fora da conta`:''}</span></div>
+      <section class="card pn-card pn-largo"><div class="pn-h"><h3>Disponibilidade dia a dia</h3><span class="sub">% dos conjuntos lançados no dia rodando ou parados com cota${media!=null?` · tracejado = média do mês (${fP(media)})`:''}${aberto?` · ${aberto.d===hoje?'hoje':esc(fDia(aberto.d))} ainda em lançamento, fora da conta`:''}</span></div>
         <div class="pn-linha">
           <div class="pn-eixo" aria-hidden="true"><span>100%</span><span>75%</span><span>50%</span><span>25%</span><span>0%</span></div>
           <div class="pn-area">
@@ -836,7 +907,7 @@ function renderPainel(){
               ${media!=null?`<line x1="0" x2="100" y1="${(100-media*100).toFixed(2)}" y2="${(100-media*100).toFixed(2)}" class="pn-media"/>`:''}
               ${caminho?`<path d="${caminho} L${pts.filter(Boolean).slice(-1)[0][0].toFixed(2)} 100 L${pts.find(Boolean)[0].toFixed(2)} 100 Z" class="pn-fundo"/><path d="${caminho}" class="pn-traco"/>`:''}
             </svg>
-            <div class="pn-pts">${porDia.map((r,i)=>{ const p = pctDe(r); return p==null ? '' : `<button type="button" class="pn-pt${p===Math.min(...comDado.map(pctDe))?' pior':''}" style="left:${(i+.5)/n*100}%;top:${100-p*100}%" data-res="disp|${r.d}" title="${esc(fDia(r.d))}: ${fP(p)} disponíveis (${r.disp} de ${N})${r.c.vazio?' · '+r.c.vazio+' sem lançamento':''}"><span>${p===Math.min(...comDado.map(pctDe))?fP(p):''}</span></button>`; }).join('')}</div>
+            <div class="pn-pts">${porDia.map((r,i)=>{ const p = pctDe(r); return p==null ? '' : `<button type="button" class="pn-pt${p===Math.min(...comDado.map(pctDe))?' pior':''}" style="left:${(i+.5)/n*100}%;top:${100-p*100}%" data-res="disp|${r.d}" title="${esc(fDia(r.d))}: ${fP(p)} disponíveis (${r.disp} de ${r.lanc} lançados)${r.c.vazio?' · '+r.c.vazio+' sem lançamento':''}"><span>${p===Math.min(...comDado.map(pctDe))?fP(p):''}</span></button>`; }).join('')}</div>
           </div>
         </div>
         <div class="pn-dias" style="grid-template-columns:repeat(${n},1fr)">${Array.from({length:n},(_,i)=>{ const d = diaDoMes(S.mes,i+1); return `<span class="${d===hoje?'hoje':''}">${rot(d)?i+1:''}</span>`; }).join('')}</div>
@@ -864,7 +935,7 @@ function renderPainel(){
     </div>
     <p class="sub" style="margin:0">Regra igual às outras telas: disponível = rodando ou parado com cota; esperado = meta do veículo × dias decorridos (até ontem) ÷ dias do mês; conjunto que entrou no meio do mês conta só a partir do primeiro lançamento. Os gráficos usam o filtro de grid acima; o de faturamento por grid mostra sempre os quatro.</p>`;
   $('#pn-grid', v).addEventListener('change', e=>{ S.pnGrid = e.target.value; renderPainel(); });
-  $('#pn-mes', v).addEventListener('change', async e=>{ S.mes = e.target.value; lsSet('frt_mes', S.mes); await carregarMes(); renderPainel(); });
+  $('#pn-mes', v).addEventListener('change', e=> trocarMes(e.target.value));
   // do gráfico ao caso: o pedaço clicado vira o filtro da tela de trabalho
   $$('[data-res]', v).forEach(b=> b.addEventListener('click', ()=>{ const [k,d] = b.dataset.res.split('|'); S.f.res = { g:k, dia:d }; S.f.grid = g; S.f.prog = ''; S.f.chip = ''; irPara('quadro'); }));
   $$('[data-grid]', v).forEach(b=> b.addEventListener('click', ()=>{ S.fatF.grid = b.dataset.grid; S.fatF.sit = ''; irPara('faturamento'); }));
@@ -880,7 +951,7 @@ function renderPainel(){
 function custoParada(veic, n, hoje){
   const por = {};
   veic.forEach(x=>{
-    const base = S.metas[S.mes+'|'+x.grid] || 0, dia = base / n; let entrou = false;
+    const base = metaDe(S.mes, x.grid), dia = base / n; let entrou = false;
     for(let d=1; d<=n; d++){ const s = diaDoMes(S.mes, d); if(s > hoje) break; const st = stDe(x.placa, s); if(st) entrou = true; if(!entrou || !st || st.disponivel) continue;
       const k = st.nome, c = por[k] || (por[k] = { nome:k, g:GRUPO_DE[st.grupo], dias:0, valor:0, placas:new Map() });
       c.dias++; c.valor += dia; const pc = c.placas.get(x.placa) || { dias:0, valor:0 }; pc.dias++; pc.valor += dia; c.placas.set(x.placa, pc); }
@@ -906,7 +977,7 @@ function linhasFat(){
   return S.veic.map(x=>{
     // meta proporcional (pedido do Luiz, 28/10): conjunto que entrou na frota no meio do mês só tem meta dos dias
     // em que já estava aqui. A entrada é o primeiro dia com lançamento no mês; antes disso ele não existia na frota.
-    const base = S.metas[S.mes+'|'+x.grid] || 0, fat = S.fat[x.placa] || 0;
+    const base = metaDe(S.mes, x.grid), fat = S.fat[x.placa] || 0;
     let ini = 0;
     for(let d=1; d<=n; d++){ if(reg(x.placa, diaDoMes(S.mes,d)) && reg(x.placa, diaDoMes(S.mes,d)).status){ ini = d; break; } }
     const desde = ini || 1, meta = base*(n-desde+1)/n, esp = base*Math.max(0, ate-desde+1)/n;
@@ -946,17 +1017,17 @@ function renderFaturamento(){
       ${['critico','atencao','ok'].map(k=>`<button class="tl-card k-${k} ${FF.sit===k?'on':''}" type="button" data-sit="${k}" aria-pressed="${FF.sit===k}" title="${k==='critico'?'Menos da metade do esperado':k==='atencao'?'Entre 50% e 85% do esperado':'85% ou mais do esperado'}"><span class="tl-ico">${ICO[k==='critico'?'alerta':k==='atencao'?'relogio':'disp']}</span><b>${cnt(k)}</b><span>${SIT[k][0]}</span><small>${k==='critico'?'abaixo de 50% do ritmo':k==='atencao'?'de 50% a 85%':'85% ou mais'}</small></button>`).join('')}
     </div>
     ${FF.grid||FF.sit?`<div class="filtros-ativos">${FF.grid?`<button type="button" data-x="grid">${esc(S.grids[FF.grid].nome)} ✕</button>`:''}${FF.sit?`<button type="button" data-x="sit">${esc(SIT[FF.sit][0])} ✕</button>`:''}</div>`:''}
-    <div class="card tbl-wrap" style="max-height:70vh"><table class="tb"><thead><tr><th>Placa</th><th>Motorista</th><th>Grid</th>${lib2()?`<th class="${pre2()}" title="O mês do conjunto, como no Quadro: rodando, parado, manutenção, motorista, SSMA e sem lançamento">O mês</th>`:''}<th class="n" title="Dias indisponíveis no mês até hoje">Dias parado</th><th>Motivo principal</th><th class="n">Faturado</th><th class="n">Esperado</th><th>Ritmo</th><th class="n">Falta</th><th>Situação</th><th title="Por que a placa não está batendo a meta (o antigo OBS do Dashboard)">Justificativa</th></tr></thead><tbody>
+    <div class="card tbl-wrap"><table class="tb"><thead><tr><th>Placa</th><th>Motorista</th><th>Grid</th>${lib2()?`<th class="${pre2()}" title="O mês do conjunto, como no Quadro: rodando, parado, manutenção, motorista, SSMA e sem lançamento">O mês</th>`:''}<th class="n" title="Dias indisponíveis no mês até hoje">Dias parado</th><th>Motivo principal</th><th class="n">Faturado</th><th class="n">Esperado</th><th>Ritmo</th><th class="n">Falta</th><th>Situação</th><th title="Por que a placa não está batendo a meta (o antigo OBS do Dashboard)">Justificativa</th></tr></thead><tbody>
       ${lista.map(l=>`<tr data-ficha="${esc(l.x.placa)}"><td class="mono"><b>${esc(l.x.placa)}</b></td><td>${esc(l.x.motorista||'–')}${l.entrou?` <span class="tag blue" title="Primeiro lançamento no dia ${l.entrou}: a meta conta a partir daí">entrou dia ${l.entrou}</span>`:''}</td><td>${esc((S.grids[l.x.grid]||{}).nome||'')}</td>${lib2()?`<td class="${pre2()}">${faixaMes(l.x.placa)}</td>`:''}<td class="n">${l.ind||''}</td><td class="sub">${l.motivo?esc(l.motivo[1]+'× '+l.motivo[0].toLowerCase()):''}</td>
         <td class="n">${fR(l.fat)}</td><td class="n">${fR(l.esp)}</td><td><div style="display:flex;gap:6px;align-items:center"><div class="meter" style="width:80px"><i class="${cls(l.ritmo)}" style="width:${Math.min(100,(l.ritmo||0)*100)}%"></i></div><span class="mono">${fP(l.ritmo)}</span></div></td>
         <td class="n">${l.gap>0?fR(l.gap):'–'}</td><td><span class="tag ${SIT[l.sit][1]}">${SIT[l.sit][0]}</span></td>
-        <td data-just="${esc(l.x.placa)}" style="white-space:normal;min-width:220px;max-width:340px" title="Clique para escrever ou mudar">${S.just[l.x.placa]?`<span class="sub" style="color:var(--ink-2)">${esc(S.just[l.x.placa].texto.length>90?S.just[l.x.placa].texto.slice(0,90)+'…':S.just[l.x.placa].texto)}</span>`:l.sit!=='ok'?'<button class="btn sm" type="button">+ Justificar</button>':''}</td></tr>`).join('') || `<tr><td colspan="${lib2()?12:11}" class="muted">Nenhuma placa com esses filtros.</td></tr>`}
+        <td data-just="${esc(l.x.placa)}" style="white-space:normal;min-width:220px;max-width:340px" title="Clique para escrever ou mudar">${S.just[l.x.placa]?`<span class="sub" style="color:var(--ink-2)">${esc(S.just[l.x.placa].texto.length>90?S.just[l.x.placa].texto.slice(0,90)+'…':S.just[l.x.placa].texto)}</span>`:l.sit!=='ok'?'<span class="just-link">justificar</span>':''}</td></tr>`).join('') || `<tr><td colspan="${lib2()?12:11}" class="muted">Nenhuma placa com esses filtros.</td></tr>`}
     </tbody></table></div>
     ${S.fatFora && liberado() ? `<div class="card aviso-fora${preLib()}" style="padding:12px 16px"><b>${fR(S.fatFora)} faturados em placa que não está na lista de conjuntos</b>${preLib()?' <span class="tag">🔒 só o gestor vê até 16/11</span>':''}
       <div class="sub" style="margin-top:4px">Entram no total do mês, mas em nenhum grid. Uma planilha que soma só a lista de conjuntos (como a aba Gestão Frota) fica com esse valor a menos. Confira se é conjunto novo ou de fora da frota:</div>
       <div style="display:flex;gap:6px;flex-wrap:wrap;margin-top:8px">${Object.entries(S.foraPlacas||{}).sort((a,b)=>b[1]-a[1]).map(([p,val])=>`<span class="tag"><b class="mono">${esc(p)}</b> · ${fR(val)}</span>`).join('')}</div></div>` : ''}
-    <p class="sub" style="margin:0">Fonte: ${S.fatImportado?'relatório de faturamento por CT-e importado em '+fDiaHora(S.fatImportado):`aba Faturamento RAW da planilha de ${esc(nomeMes(S.mes))}, lida sozinha. A planilha perdeu a data de emissão de parte dos CT-e ("########"): esses contam no mês, não no dia`}. As placas são padronizadas sozinhas (ponto, hífen e espaço saem), sem precisar de aba de correção.${S.fatFora && !liberado()?` ${fR(S.fatFora)} faturados em placa que não está na frota entram no total, mas não em nenhum grid.`:''}</p>`;
-  $('#ff-mes', v).addEventListener('change', async e=>{ S.mes = e.target.value; lsSet('frt_mes', S.mes); await carregarMes(); renderFaturamento(); });
+    <p class="sub" style="margin:0">Fonte: ${S.fatImportado?'relatório de faturamento por CT-e importado em '+fDiaHora(S.fatImportado):`aba Faturamento RAW da planilha de ${esc(nomeMes(S.mes))}${S.ultimaLeitura ? ', lida em '+fDiaHora(S.ultimaLeitura) : ''}. A planilha perdeu a data de emissão de parte dos CT-e ("########"): esses contam no mês, não no dia`}. As placas são padronizadas sozinhas (ponto, hífen e espaço saem), sem precisar de aba de correção.${S.fatFora && !liberado()?` ${fR(S.fatFora)} faturados em placa que não está na frota entram no total, mas não em nenhum grid.`:''}</p>`;
+  $('#ff-mes', v).addEventListener('change', e=> trocarMes(e.target.value));
   const imp = $('#ff-imp', v); if(imp) imp.addEventListener('click', modalImportarFaturamento);
   const imp2 = $('#imp-de-novo', v); if(imp2) imp2.addEventListener('click', modalImportarFaturamento);
   $$('[data-just]', v).forEach(td=> td.addEventListener('click', e=>{ e.stopPropagation(); modalJustificativa(td.dataset.just); }));
@@ -1037,17 +1108,21 @@ function modalImportarFaturamento(){
             valor:numBR(pega(l,'faturamento'))||0, margem_bruta:numBR(pega(l,'margem bruta')), margem_liquida:numBR(pega(l,'margem liquida')), importado_em:new Date().toISOString(), importado_por:S.email };
         });
         const total = prontos.reduce((a,x)=>a+x.valor, 0), outro = Object.entries(meses).sort((a,b)=>b[1]-a[1])[0];
-        prev.innerHTML = `<b>${fN(prontos.length)} CT-e · ${esc(fR(total))}</b> para ${esc(mesNome)}.${fora?` ${fora} linhas com placa fora da frota (entram no total, não no grid).`:''}${outro && outro[0]!==S.mes ? ` <span style="color:var(--red)">Atenção: a maioria das emissões é de ${esc(outro[0])}. Confira o mês escolhido.</span>`:''}`;
+        // o que ficou de fora (linha de total, linha em branco, placa escrita errado): conta para o gestor conferir com o arquivo
+        const ign = linhas.dados.filter(l=> l && l.some(c=> c!=null && c!=='') && !/^[A-Z]{3}\d[A-Z0-9]\d{2}$/.test(placaP(pega(l,'placa'))||''));
+        const ignVal = ign.reduce((a,l)=> a + (numBR(pega(l,'faturamento'))||0), 0);
+        prev.innerHTML = `<b>${fN(prontos.length)} CT-e · ${esc(fR(total))}</b> para ${esc(mesNome)}.${fora?` ${fora} linhas com placa fora da frota (entram no total, não no grid).`:''}${ign.length?`<div class="sub" style="margin-top:4px">${ign.length} ${ign.length>1?'linhas ficaram':'linha ficou'} de fora por não ter placa válida${ignVal?` (somam ${esc(fR(ignVal))}${Math.abs(ignVal-total)<1?': é a linha de total do relatório, confere com o que entrou':''})`:''}.</div>`:''}${outro && outro[0]!==S.mes ? ` <span style="color:var(--red)">Atenção: a maioria das emissões é de ${esc(outro[0])}. Confira o mês escolhido.</span>`:''}`;
         $('#fi-ok', bg).disabled = !prontos.length;
       }catch(err){ prev.textContent = 'Não consegui ler o arquivo: '+(err.message||err); }
     });
     $('#fi-ok', bg).addEventListener('click', async ()=>{
       const b = $('#fi-ok', bg); b.disabled = true; b.textContent = 'Importando…';
-      const del = await sb.from('frt_faturamento').delete().eq('competencia', diaDoMes(S.mes,1));
-      if(del.error){ toast('Não importou: '+del.error.message); b.disabled = false; b.textContent = 'Importar'; return; }
-      for(let i=0; i<prontos.length; i+=500){ const { error } = await sb.from('frt_faturamento').upsert(prontos.slice(i,i+500), { onConflict:'id' });
-        if(error){ toast('Parou no meio: '+error.message+'. Importe de novo.'); b.disabled = false; b.textContent = 'Importar'; return; } }
-      toast(fN(prontos.length)+' CT-e importados.'); fecharModal(); await carregarMes(); render();
+      // tudo numa transação no banco: se der erro, o faturamento que estava continua inteiro
+      const linhasEnv = prontos.map(({ competencia, importado_em, importado_por, ...x })=> x);
+      const { data:r, error } = await sb.rpc('frt_importar_faturamento', { p_competencia: diaDoMes(S.mes,1), p_linhas: linhasEnv });
+      if(error){ toast('Não importou (o faturamento anterior continua): '+error.message); b.disabled = false; b.textContent = 'Importar'; return; }
+      toast(fN(r.gravados)+' CT-e importados · '+fR(r.total)+(r.repetidos ? ' · '+r.repetidos+' linhas repetidas ignoradas' : '')+(r.de_outro_mes ? ' · '+r.de_outro_mes+' já eram de outro mês' : ''));
+      fecharModal(); await carregarMes(); render();
     });
   });
 }
@@ -1152,7 +1227,7 @@ async function renderEquipe(){
     return `<div class="card eq-card"><div class="eq-topo"><div><span class="eyebrow">Programador</span><h3>${esc(nomeBonito(p))}</h3><span class="sub">${pl.n} conjuntos</span></div>
         <div class="eq-pct" title="Dias-conjunto dos últimos 7 dias lançados aqui no sistema (o resto veio da planilha ou está sem lançamento)"><b>${fP(pl.pct)}</b><span class="sub">lançado aqui<br>últimos 7 dias</span></div></div>
       ${quem.length ? quem.map(pessoa).join('') : `<p class="sub" style="margin:0">Ninguém lança os caminhões de ${esc(nomeBonito(p))} aqui ainda.</p>`}
-      <div class="eq-conv"><input type="email" placeholder="E-mail de quem lança os caminhões de ${esc(nomeBonito(p))}" data-email-prog="${esc(p)}" aria-label="E-mail para convidar"><button class="btn${quem.length?'':' pri'}" type="button" data-convidar="${esc(p)}">Convidar</button></div></div>`; }).join('');
+      ${quem.length ? `<button class="btn sm" type="button" data-mais="${esc(p)}" style="justify-self:start">+ outra pessoa para estes caminhões</button>` : ''}<div class="eq-conv" ${quem.length?'hidden':''} data-conv="${esc(p)}"><input type="email" placeholder="E-mail de quem lança os caminhões de ${esc(nomeBonito(p))}" data-email-prog="${esc(p)}" aria-label="E-mail para convidar"><button class="btn pri" type="button" data-convidar="${esc(p)}">Convidar</button></div></div>`; }).join('');
   const outros = ms.filter(m=> m.papel!=='programador');
   v.innerHTML = `<div class="head${preLib()}"><div><span class="eyebrow">Equipe${preLib()?' · 🔒 só você vê até 16/11; o Marcos vê a versão antiga até lá':''}</span><h2>Quem usa a torre</h2>
       <p>Convide com o e-mail e mande a mensagem pronta pelo WhatsApp. A pessoa tem 48 horas para criar a senha. O programador entra direto na tela Hoje, só com os caminhões dele.</p></div>
@@ -1163,6 +1238,7 @@ async function renderEquipe(){
       <div class="eq-conv"><input type="email" id="eq-o-email" placeholder="E-mail" aria-label="E-mail"><input id="eq-o-nome" placeholder="Nome" aria-label="Nome">
         <select id="eq-o-papel" aria-label="Perfil"><option value="leitura">Só acompanha</option><option value="admin">Gestor</option></select><button class="btn" type="button" id="eq-o-add">Convidar</button></div></div>`;
   $('#eq-tour', v).addEventListener('click', ()=> tourAbrir('botao', 'equipe'));
+  $$('[data-mais]', v).forEach(b=> b.addEventListener('click', ()=>{ const c = $(`[data-conv="${b.dataset.mais}"]`, v); c.hidden = false; b.hidden = true; $('input', c).focus(); }));
   const prazo = ()=> new Date(Date.now()+48*3600000).toISOString();
   const okEmail = e => /^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(e);
   async function gravar(row, aviso){
@@ -1255,7 +1331,7 @@ async function novidadesIniciar(){
   if(lsGet(novChave(), '') !== lista[0].id && !$('#nov-faixa')){
     const f = document.createElement('div'); f.id = 'nov-faixa'; f.setAttribute('role','status');
     f.innerHTML = `<span>✨ <b>Tem novidade no sistema.</b></span><button class="btn pri" type="button" id="nov-ver">Ver o que mudou</button><button class="btn" type="button" id="nov-x" aria-label="Fechar">✕</button>`;
-    document.body.appendChild(f); $('#nov-ver').addEventListener('click', novidadesAbrir); $('#nov-x').addEventListener('click', ()=> f.remove());
+    document.body.appendChild(f); $('#nov-ver').addEventListener('click', novidadesAbrir); $('#nov-x').addEventListener('click', novMarcarVisto);
     $('#btn-nov').classList.add('novo');
   }
 }
