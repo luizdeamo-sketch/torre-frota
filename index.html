@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
-<meta name="app-build" content="202611231415">
+<meta name="app-build" content="202611241106">
 <title>Torre de Controle - Transpanorama</title>
 <link rel="icon" href="favicon.png" type="image/png">
 <link rel="preconnect" href="https://fonts.googleapis.com">
@@ -207,6 +207,14 @@ table.tb tbody tr:hover td{background:var(--panel-2)}
 .meter u{position:absolute;top:-2px;bottom:-2px;width:2px;background:var(--ink)}
 /* pronto antes da segunda: só o gestor vê, com borda roxa tracejada (regra da versão de segunda) */
 .pre-lib{outline:2px dashed #7c3aed;outline-offset:2px}
+/* faixa do mês em miniatura (Faturamento) e linha da importação */
+.fx-mini{position:relative;height:12px;width:clamp(150px,13vw,340px);border-radius:4px;background:var(--gray-soft);overflow:hidden}
+.fx-mini i{position:absolute;top:0;bottom:0;border-right:1px solid var(--panel)}
+.fx-mini i.g-vazio{border:0}
+.imp-linha{display:flex;gap:10px;align-items:center;flex-wrap:wrap;padding:10px 14px}
+.imp-linha .grow{flex:1}
+.cob-grade{display:grid;grid-template-columns:repeat(auto-fit,minmax(240px,1fr));gap:10px}
+.cob-item{border:1px solid var(--line);border-radius:10px;padding:10px 12px;display:grid;gap:6px;align-content:start}
 /* Equipe: um cartão por programador */
 .eq-grade{display:grid;grid-template-columns:repeat(auto-fit,minmax(300px,1fr));gap:14px;margin-bottom:14px}
 a.btn{text-decoration:none}
@@ -465,7 +473,7 @@ a.btn{text-decoration:none}
 <div id="modal-root"></div>
 
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.45.4/dist/umd/supabase.min.js"></script>
-<script src="app.js?v=202611231415"></script>
-<script src="acompanhante.js?v=202611231415"></script>
+<script src="app.js?v=202611241106"></script>
+<script src="acompanhante.js?v=202611241106"></script>
 </body>
 </html>
