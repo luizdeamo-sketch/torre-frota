@@ -67,8 +67,9 @@ const DONOS = ['luizdeamo@gmail.com', 'luiz.amo@capacitycase.com.br'];
 const ehDono = ()=> DONOS.includes(S.email);
 const liberado = ()=> ehDono() || hojeISO() >= LIBERA;
 const preLib = ()=> hojeISO() < LIBERA ? ' pre-lib' : '';
-// versão de 30/11 (pedido do Luiz em 24/11, a partir da análise de cliques do Marcos)
-const LIBERA2 = '2026-11-30';
+// versão pedida pelo Luiz em 24/11 (análise de cliques do Marcos). Era para 30/11, mas o Luiz soltou no mesmo dia:
+// na degustação a Transpanorama não segue a regra da segunda (melhoria sai assim que fica pronta, para criar o hábito).
+const LIBERA2 = '2026-11-24';
 const lib2 = ()=> ehDono() || hojeISO() >= LIBERA2;
 const pre2 = ()=> hojeISO() < LIBERA2 ? ' pre-lib' : '';
 const tag2 = ()=> pre2() ? ' <span class="tag">🔒 só você vê até 30/11</span>' : '';
