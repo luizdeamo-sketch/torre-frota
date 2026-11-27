@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
-<meta name="app-build" content="202611241148">
+<meta name="app-build" content="202611270955">
 <title>Torre de Controle - Transpanorama</title>
 <link rel="icon" href="favicon.png" type="image/png">
 <link rel="preconnect" href="https://fonts.googleapis.com">
@@ -216,6 +216,16 @@ table.tb tbody tr:hover td{background:var(--panel-2)}
 tr:hover .just-link,[data-just]:focus-within .just-link{color:var(--title)}
 /* celular: alvo de toque de pelo menos 44 px (programador lança com o dedo) e letra um pouco maior */
 @media (max-width:640px){ .btn,.btn.sm,.icon-btn,.st-btn{min-height:44px} .sub{font-size:13px} body{font-size:15px} }
+/* celular do gestor (27/11): números em duas colunas e tabelas só com o que decide (placa, o mês, faturado, ritmo, situação) */
+@media (max-width:640px){
+  .kpis{grid-template-columns:repeat(2,minmax(0,1fr));gap:8px}
+  .kpis .kpi{padding:10px 12px} .kpis .kpi b{font-size:20px} .kpis .kpi small{font-size:11.5px} .kpis .kpi .sub{font-size:12px}
+  .m-esc{display:none}
+  .tb .fx-mini{width:88px}
+  .tb .meter{display:none}
+  .tb th,.tb td{padding-left:8px;padding-right:8px}
+  .rit-critico{color:var(--red);font-weight:700} .rit-atencao{color:var(--amber);font-weight:700} .rit-ok{color:var(--green);font-weight:700}
+}
 #aviso-topo{flex-wrap:wrap}
 #aviso-topo .grow{flex:1 1 280px}
 #aviso-topo b{color:var(--title)}
@@ -487,7 +497,7 @@ a.btn{text-decoration:none}
 <div id="modal-root"></div>
 
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.45.4/dist/umd/supabase.min.js"></script>
-<script src="app.js?v=202611241148"></script>
-<script src="acompanhante.js?v=202611241148"></script>
+<script src="app.js?v=202611270955"></script>
+<script src="acompanhante.js?v=202611270955"></script>
 </body>
 </html>
